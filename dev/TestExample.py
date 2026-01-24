@@ -281,7 +281,8 @@ def generate_fn(toolbox, problem):
 # DEAP Toolbox Setup for LVE
 # =============================================================================
 toolbox_lve = base.Toolbox()
-toolbox_lve.register("attr_latent", random.gauss, 0, 1)
+#toolbox_lve.register("attr_latent", random.gauss, 0, 1)
+toolbox_lve.register("attr_latent", random.uniform, -2, 2)
 toolbox_lve.register("individual", tools.initRepeat, creator.Individual, toolbox_lve.attr_latent, n=LATENT_DIM)
 toolbox_lve.register("population", tools.initRepeat, list, toolbox_lve.individual)
 toolbox_lve.register("select", tools.selTournament, tournsize=TOURNSIZE_LVE)
