@@ -29,6 +29,7 @@ HIDDEN_DIM = 32  #@param {type:"integer"}
 EPOCHS = 100  #@param {type:"integer"}
 BATCH_SIZE = 32  #@param {type:"integer"}
 LR = 1e-3  #@param {type:"number"}
+VAL_SPLIT = 0.2  #@param {type:"number"}
 
 # BetaTCVAE Loss Weights (alpha=beta=gamma=1 -> standard VAE)
 ALPHA = 1.0  #@param {type:"number"}
@@ -219,7 +220,7 @@ latent_module = BetaTCVAE(DIM, LATENT_DIM, HIDDEN_DIM, alpha=ALPHA, beta=BETA, g
 lve = LVE(data_gen, latent_module, toolbox_lve, device=DEVICE,
           init_from_dataset=INIT_FROM_DATASET, init_epsilon=INIT_EPSILON)
 lve.dataset = dataset
-losses = lve.train_module(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LR)
+loss_history = lve.train_module(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LR, val_split=VAL_SPLIT)
 
 print("\n" + "=" * 50)
 print("Step 3: Latent Variable Evolution")
