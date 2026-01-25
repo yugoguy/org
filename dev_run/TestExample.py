@@ -26,10 +26,6 @@ INDPB_DATA = 0.2  #@param {type:"number"}
 # Latent Module
 LATENT_DIM = 5  #@param {type:"integer"}
 HIDDEN_DIM = 32  #@param {type:"integer"}
-EPOCHS = 100  #@param {type:"integer"}
-BATCH_SIZE = 32  #@param {type:"integer"}
-LR = 1e-3  #@param {type:"number"}
-VAL_SPLIT = 0.2  #@param {type:"number"}
 
 # BetaTCVAE Loss Weights (alpha=beta=gamma=1 -> standard VAE)
 ALPHA = 1.0  #@param {type:"number"}
@@ -37,8 +33,6 @@ BETA = 1.0  #@param {type:"number"}
 GAMMA = 1.0  #@param {type:"number"}
 
 # LVE GA
-POP_SIZE_LVE = 50  #@param {type:"integer"}
-N_GEN_LVE = 30  #@param {type:"integer"}
 CXPB_LVE = 0.7  #@param {type:"number"}
 MUTPB_LVE = 0.3  #@param {type:"number"}
 TOURNSIZE_LVE = 3  #@param {type:"integer"}
@@ -59,13 +53,13 @@ torch.manual_seed(SEED)
 # =============================================================================
 # DEAP Toolbox Setup for Data Generation
 # =============================================================================
-if hasattr(creator, "FitnessMin"):
-    del creator.FitnessMin
+if hasattr(creator, "FitnessMax"):
+    del creator.FitnessMax
 if hasattr(creator, "Individual"):
     del creator.Individual
 
-creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
-creator.create("Individual", list, fitness=creator.FitnessMin)
+creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+creator.create("Individual", list, fitness=creator.FitnessMax)
 
 toolbox_data = base.Toolbox()
 toolbox_data.register("attr_float", random.uniform, X_MIN, X_MAX)
@@ -82,10 +76,10 @@ def single_ga_run(toolbox, problem):
     """Single GA run minimizing constraint. Returns best individual if feasible, else None."""
     pop = toolbox.population(n=POP_SIZE_DATA)
     
-    # Evaluate using constraint as fitness
+    # Evaluate using negative |constraint| as fitness (maximize = minimize |constraint|)
     for ind in pop:
         constraint_val = problem.constraint(ind)
-        ind.fitness.values = (abs(constraint_val),)  # minimize |constraint|
+        ind.fitness.values = (-abs(constraint_val),)
     
     for gen in range(N_GEN_DATA):
         offspring = toolbox.select(pop, len(pop))
@@ -109,11 +103,11 @@ def single_ga_run(toolbox, problem):
         for ind in offspring:
             if not ind.fitness.valid:
                 constraint_val = problem.constraint(ind)
-                ind.fitness.values = (abs(constraint_val),)
+                ind.fitness.values = (-abs(constraint_val),)
         
         pop[:] = offspring
         
-        # Early stop if constraint satisfied
+        # Early stop if constraint satisfied (fitness == 0)
         best_ind = tools.selBest(pop, 1)[0]
         if best_ind.fitness.values[0] == 0.0:
             break
@@ -151,20 +145,75 @@ toolbox_lve.register("mutate", tools.mutGaussian, mu=0, sigma=0.5, indpb=INDPB_L
 # =============================================================================
 # Evolve Function for LVE
 # =============================================================================
+def calculate_values(ind, lve):
+    """Calculate objective and constraint for a decoded individual."""
+    problem = lve.data_generation.problem
+    decoded = lve.decode([ind])[0]
+    return {
+        'obj': problem.fitness(decoded),
+        'constraint': problem.constraint(decoded)
+    }
+
+def play(ind0, ind1):
+    """Tournament match: compare objective and constraint."""
+    # Objective comparison (minimization)
+    if ind0.calculated_values['obj'] == ind1.calculated_values['obj']:
+        ind0.gathered_score += 1
+        ind1.gathered_score += 1
+    elif ind0.calculated_values['obj'] < ind1.calculated_values['obj']:
+        ind0.gathered_score += 1
+    else:
+        ind1.gathered_score += 1
+    
+    # Constraint comparison (0 = satisfied, want <= 0)
+    c0 = ind0.calculated_values['constraint']
+    c1 = ind1.calculated_values['constraint']
+    
+    c0_feasible = c0 <= 0
+    c1_feasible = c1 <= 0
+    
+    if not c0_feasible and not c1_feasible:  # both infeasible
+        if c0 < c1:
+            ind0.gathered_score += 1
+        else:
+            ind1.gathered_score += 1
+    else:
+        if c0_feasible:
+            ind0.gathered_score += 1
+        if c1_feasible:
+            ind1.gathered_score += 1
+    
+    ind0.num_matches += 1
+    ind1.num_matches += 1
+
 def evolve_fn(toolbox, lve, pop_size, n_gen):
-    """LVE loop in latent space."""
+    """LVE loop in latent space with tournament-based constraint handling."""
     problem = lve.data_generation.problem
     
     # Initialize population using LVE method
     pop = lve.init_population(pop_size)
     
-    # Evaluate initial population
-    decoded = lve.decode(pop)
-    for i, ind in enumerate(pop):
-        fit, _ = problem.evaluate(decoded[i])
-        ind.fitness.values = (fit,)
+    # Calculate values and initialize scores
+    for ind in pop:
+        ind.calculated_values = calculate_values(ind, lve)
+        ind.gathered_score = 0
+        ind.num_matches = 0
     
-    best_fitness = float('inf')
+    # Initial tournament
+    for ind in pop:
+        participants = random.sample(pop, min(5, len(pop)))
+        for _ in range(10):
+            duel = random.sample(participants, 2)
+            play(duel[0], duel[1])
+    
+    # Set fitness (maximizing score)
+    for ind in pop:
+        if ind.num_matches == 0:
+            ind.fitness.values = (0,)
+        else:
+            ind.fitness.values = (ind.gathered_score / ind.num_matches,)
+    
+    best_obj = float('inf')
     
     for gen in range(n_gen):
         offspring = toolbox.select(pop, len(pop))
@@ -181,25 +230,44 @@ def evolve_fn(toolbox, lve, pop_size, n_gen):
                 toolbox.mutate(mutant)
                 del mutant.fitness.values
         
-        # Evaluate offspring
-        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        if len(invalid_ind) > 0:
-            decoded = lve.decode(invalid_ind)
-            for i, ind in enumerate(invalid_ind):
-                fit, _ = problem.evaluate(decoded[i])
-                ind.fitness.values = (fit,)
+        # Recalculate all values and reset scores
+        for ind in offspring:
+            ind.calculated_values = calculate_values(ind, lve)
+            ind.gathered_score = 0
+            ind.num_matches = 0
+        
+        # Tournament
+        for ind in offspring:
+            participants = random.sample(offspring, min(5, len(offspring)))
+            for _ in range(10):
+                duel = random.sample(participants, 2)
+                play(duel[0], duel[1])
+        
+        # Set fitness
+        for ind in offspring:
+            if ind.num_matches == 0:
+                ind.fitness.values = (0,)
+            else:
+                ind.fitness.values = (ind.gathered_score / ind.num_matches,)
         
         pop[:] = offspring
         
-        current_best = min(ind.fitness.values[0] for ind in pop)
-        if current_best < best_fitness:
-            best_fitness = current_best
+        # Track best feasible objective
+        for ind in pop:
+            if ind.calculated_values['constraint'] <= 0:
+                if ind.calculated_values['obj'] < best_obj:
+                    best_obj = ind.calculated_values['obj']
         
         if (gen + 1) % 10 == 0:
-            print(f"LVE Gen {gen + 1}/{n_gen}, Best: {best_fitness:.4f}")
+            print(f"LVE Gen {gen + 1}/{n_gen}, Best feasible obj: {best_obj:.4f}")
     
-    # Return best solution in original space
-    best_ind = min(pop, key=lambda x: x.fitness.values[0])
+    # Return best feasible solution, or best overall if none feasible
+    feasible = [ind for ind in pop if ind.calculated_values['constraint'] <= 0]
+    if feasible:
+        best_ind = min(feasible, key=lambda x: x.calculated_values['obj'])
+    else:
+        best_ind = min(pop, key=lambda x: x.calculated_values['constraint'])
+    
     return lve.decode([best_ind])[0]
 
 # =============================================================================
@@ -216,6 +284,10 @@ print(f"Dataset size: {len(dataset)}")
 print("\n" + "=" * 50)
 print("Step 2: Train Latent Module (BetaTCVAE)")
 print("=" * 50)
+EPOCHS = 100  #@param {type:"integer"}
+BATCH_SIZE = 32  #@param {type:"integer"}
+LR = 1e-3  #@param {type:"number"}
+VAL_SPLIT = 0.2  #@param {type:"number"}
 latent_module = BetaTCVAE(DIM, LATENT_DIM, HIDDEN_DIM, alpha=ALPHA, beta=BETA, gamma=GAMMA)
 lve = LVE(data_gen, latent_module, toolbox_lve, device=DEVICE,
           init_from_dataset=INIT_FROM_DATASET, init_epsilon=INIT_EPSILON)
@@ -225,6 +297,8 @@ loss_history = lve.train_module(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LR, val
 print("\n" + "=" * 50)
 print("Step 3: Latent Variable Evolution")
 print("=" * 50)
+POP_SIZE_LVE = 50  #@param {type:"integer"}
+N_GEN_LVE = 30  #@param {type:"integer"}
 best_solution = lve.evolve(POP_SIZE_LVE, N_GEN_LVE, evolve_fn)
 
 print("\n" + "=" * 50)
