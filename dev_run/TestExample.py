@@ -37,6 +37,7 @@ CXPB_LVE = 0.7  #@param {type:"number"}
 MUTPB_LVE = 0.3  #@param {type:"number"}
 TOURNSIZE_LVE = 3  #@param {type:"integer"}
 INDPB_LVE = 0.2  #@param {type:"number"}
+ELITE_SIZE = 5  #@param {type:"integer"}
 
 # LVE Initialization
 INIT_FROM_DATASET = False  #@param {type:"boolean"}
