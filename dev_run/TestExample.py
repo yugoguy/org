@@ -43,7 +43,7 @@ TOURNSIZE_LVE = 3  #@param {type:"integer"}
 INDPB_LVE = 0.2  #@param {type:"number"}
 
 # LVE Initialization
-INIT_FROM_DATASET = True  #@param {type:"boolean"}
+INIT_FROM_DATASET = False  #@param {type:"boolean"}
 INIT_EPSILON = 0.0  #@param {type:"number"}
 
 # General
