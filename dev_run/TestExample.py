@@ -237,8 +237,7 @@ print("Step 2: Train Latent Module (BetaTCVAE)")
 print("=" * 50)
 latent_module = BetaTCVAE(DIM, LATENT_DIM, HIDDEN_DIM, alpha=ALPHA, beta=BETA, gamma=GAMMA)
 lve = LVE(data_gen, latent_module, toolbox_lve, device=DEVICE,
-          init_from_dataset=INIT_FROM_DATASET, init_epsilon=INIT_EPSILON,
-          x_min=X_MIN, x_max=X_MAX)
+          init_from_dataset=INIT_FROM_DATASET, init_epsilon=INIT_EPSILON)
 lve.dataset = dataset
 loss_history = lve.train_module(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LR, val_split=VAL_SPLIT)
 
