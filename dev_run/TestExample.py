@@ -26,6 +26,10 @@ INDPB_DATA = 0.2  #@param {type:"number"}
 # Latent Module
 LATENT_DIM = 5  #@param {type:"integer"}
 HIDDEN_DIM = 32  #@param {type:"integer"}
+EPOCHS = 100  #@param {type:"integer"}
+BATCH_SIZE = 32  #@param {type:"integer"}
+LR = 1e-3  #@param {type:"number"}
+VAL_SPLIT = 0.2  #@param {type:"number"}
 
 # BetaTCVAE Loss Weights (alpha=beta=gamma=1 -> standard VAE)
 ALPHA = 1.0  #@param {type:"number"}
@@ -33,6 +37,8 @@ BETA = 1.0  #@param {type:"number"}
 GAMMA = 1.0  #@param {type:"number"}
 
 # LVE GA
+POP_SIZE_LVE = 50  #@param {type:"integer"}
+N_GEN_LVE = 30  #@param {type:"integer"}
 CXPB_LVE = 0.7  #@param {type:"number"}
 MUTPB_LVE = 0.3  #@param {type:"number"}
 TOURNSIZE_LVE = 3  #@param {type:"integer"}
@@ -156,7 +162,6 @@ def evolve_fn(toolbox, lve, pop_size, n_gen):
     # Evaluate initial population
     for ind in pop:
         decoded = lve.decode([ind])[0]
-        decoded = np.clip(decoded, X_MIN, X_MAX)
         fit = problem.fitness(decoded)
         feasible = problem.is_feasible(decoded)
         # Infeasible gets large penalty
@@ -192,7 +197,6 @@ def evolve_fn(toolbox, lve, pop_size, n_gen):
         for ind in offspring:
             if not ind.fitness.valid:
                 decoded = lve.decode([ind])[0]
-                decoded = np.clip(decoded, X_MIN, X_MAX)
                 fit = problem.fitness(decoded)
                 feasible = problem.is_feasible(decoded)
                 if not feasible:
@@ -205,7 +209,6 @@ def evolve_fn(toolbox, lve, pop_size, n_gen):
         # Track best feasible objective
         for ind in pop:
             decoded = lve.decode([ind])[0]
-            decoded = np.clip(decoded, X_MIN, X_MAX)
             if problem.is_feasible(decoded):
                 obj = problem.fitness(decoded)
                 if obj < best_obj:
@@ -216,8 +219,7 @@ def evolve_fn(toolbox, lve, pop_size, n_gen):
     
     # Return best feasible solution
     best_ind = max(pop, key=lambda x: x.fitness.values[0])
-    decoded = lve.decode([best_ind])[0]
-    return np.clip(decoded, X_MIN, X_MAX)
+    return lve.decode([best_ind])[0]
 
 # =============================================================================
 # Full Run
@@ -233,21 +235,16 @@ print(f"Dataset size: {len(dataset)}")
 print("\n" + "=" * 50)
 print("Step 2: Train Latent Module (BetaTCVAE)")
 print("=" * 50)
-EPOCHS = 100  #@param {type:"integer"}
-BATCH_SIZE = 32  #@param {type:"integer"}
-LR = 1e-3  #@param {type:"number"}
-VAL_SPLIT = 0.2  #@param {type:"number"}
 latent_module = BetaTCVAE(DIM, LATENT_DIM, HIDDEN_DIM, alpha=ALPHA, beta=BETA, gamma=GAMMA)
 lve = LVE(data_gen, latent_module, toolbox_lve, device=DEVICE,
-          init_from_dataset=INIT_FROM_DATASET, init_epsilon=INIT_EPSILON)
+          init_from_dataset=INIT_FROM_DATASET, init_epsilon=INIT_EPSILON,
+          x_min=X_MIN, x_max=X_MAX)
 lve.dataset = dataset
 loss_history = lve.train_module(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LR, val_split=VAL_SPLIT)
 
 print("\n" + "=" * 50)
 print("Step 3: Latent Variable Evolution")
 print("=" * 50)
-POP_SIZE_LVE = 50  #@param {type:"integer"}
-N_GEN_LVE = 30  #@param {type:"integer"}
 best_solution = lve.evolve(POP_SIZE_LVE, N_GEN_LVE, evolve_fn)
 
 print("\n" + "=" * 50)
