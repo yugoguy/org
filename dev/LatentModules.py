@@ -69,8 +69,8 @@ class BetaTCVAE(LatentModule):
         """
         batch_size = x.size(0)
         
-        # Reconstruction loss
-        recon_loss = F.mse_loss(x_recon, x, reduction='sum') / batch_size
+        # Reconstruction loss (mean over all elements)
+        recon_loss = F.mse_loss(x_recon, x, reduction='mean')
         
         # Log q(z|x) - log density under encoder
         log_qz_x = self.log_density_gaussian(z, mu, logvar).sum(dim=1)
