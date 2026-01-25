@@ -37,9 +37,12 @@ class BetaTCVAE(LatentModule):
         return self.fc_mu(h)
     
     def encode_dist(self, x):
-        """Returns mu and logvar for training."""
+        """Returns mu and clamped logvar for training."""
         h = self.encoder_net(x)
-        return self.fc_mu(h), self.fc_logvar(h)
+        mu = self.fc_mu(h)
+        logvar = self.fc_logvar(h)
+        logvar = torch.clamp(logvar, min=-20, max=2)
+        return mu, logvar
     
     def reparameterize(self, mu, logvar):
         """Reparameterization trick."""
@@ -62,10 +65,13 @@ class BetaTCVAE(LatentModule):
         log_density = norm - 0.5 * ((x - mu) ** 2 / torch.exp(logvar))
         return log_density
     
-    def loss(self, x, x_recon, mu=None, logvar=None, z=None, **kwargs):
+    def loss(self, x, x_recon, mu=None, logvar=None, z=None, return_parts=False, **kwargs):
         """
         Compute BetaTCVAE loss with decomposed KL.
         Uses minibatch weighted sampling for TC estimation.
+        
+        Args:
+            return_parts: if True, return dict with individual loss terms (unscaled)
         """
         batch_size = x.size(0)
         
@@ -80,31 +86,31 @@ class BetaTCVAE(LatentModule):
         log_pz = self.log_density_gaussian(z, zeros, zeros).sum(dim=1)
         
         # Log q(z) - marginal (minibatch weighted sampling)
-        # For each z_i, compute log q(z_i) = log (1/N) sum_j q(z_i|x_j)
         _logqz = self.log_density_gaussian(
-            z.unsqueeze(1),  # (batch, 1, latent)
-            mu.unsqueeze(0),  # (1, batch, latent)
-            logvar.unsqueeze(0)  # (1, batch, latent)
-        )  # (batch, batch, latent)
+            z.unsqueeze(1),
+            mu.unsqueeze(0),
+            logvar.unsqueeze(0)
+        )
         
-        # log q(z) - sum over latent dims, logsumexp over batch
         log_qz = torch.logsumexp(_logqz.sum(dim=2), dim=1) - np.log(batch_size)
-        
-        # log prod_j q(z_j) - product of marginals
         log_qz_product = (torch.logsumexp(_logqz, dim=1) - np.log(batch_size)).sum(dim=1)
         
-        # Decomposed KL terms
-        # MI: E[log q(z|x) - log q(z)]
+        # Decomposed KL terms (unscaled)
         mi_loss = (log_qz_x - log_qz).mean()
-        
-        # TC: E[log q(z) - log prod_j q(z_j)]
         tc_loss = (log_qz - log_qz_product).mean()
-        
-        # Dimension-wise KL: E[log prod_j q(z_j) - log p(z)]
         kl_loss = (log_qz_product - log_pz).mean()
         
+        # Total loss (scaled)
         total_loss = recon_loss + self.alpha * mi_loss + self.beta * tc_loss + self.gamma * kl_loss
         
+        if return_parts:
+            return {
+                'total': total_loss,
+                'recon': recon_loss,
+                'mi': mi_loss,
+                'tc': tc_loss,
+                'kl': kl_loss
+            }
         return total_loss
     
     def fit(self, dataset, epochs=100, batch_size=32, lr=1e-3, device='cpu', verbose=True, val_split=0.2):
@@ -121,7 +127,7 @@ class BetaTCVAE(LatentModule):
             val_split: fraction for validation set
         
         Returns:
-            dict with 'train_losses' and 'val_losses' per epoch
+            dict with losses per epoch
         """
         self.to(device)
         
@@ -138,42 +144,52 @@ class BetaTCVAE(LatentModule):
         val_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size, shuffle=False, drop_last=True)
         
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
-        train_losses = []
-        val_losses = []
+        
+        history = {
+            'train_total': [], 'train_recon': [], 'train_mi': [], 'train_tc': [], 'train_kl': [],
+            'val_total': [], 'val_recon': [], 'val_mi': [], 'val_tc': [], 'val_kl': []
+        }
         
         for epoch in range(epochs):
             # Training
             self.train()
-            epoch_train_loss = 0.0
+            epoch_losses = {'total': 0, 'recon': 0, 'mi': 0, 'tc': 0, 'kl': 0}
             for batch in train_loader:
                 batch = batch.to(device)
                 optimizer.zero_grad()
                 
                 x_recon, mu, logvar, z = self.forward(batch)
-                loss = self.loss(batch, x_recon, mu=mu, logvar=logvar, z=z)
+                loss_dict = self.loss(batch, x_recon, mu=mu, logvar=logvar, z=z, return_parts=True)
                 
-                loss.backward()
+                loss_dict['total'].backward()
                 optimizer.step()
-                epoch_train_loss += loss.item()
+                
+                for k in epoch_losses:
+                    epoch_losses[k] += loss_dict[k].item()
             
-            avg_train_loss = epoch_train_loss / len(train_loader)
-            train_losses.append(avg_train_loss)
+            for k in epoch_losses:
+                history[f'train_{k}'].append(epoch_losses[k] / len(train_loader))
             
             # Validation
             self.eval()
-            epoch_val_loss = 0.0
+            epoch_losses = {'total': 0, 'recon': 0, 'mi': 0, 'tc': 0, 'kl': 0}
             with torch.no_grad():
                 for batch in val_loader:
                     batch = batch.to(device)
                     x_recon, mu, logvar, z = self.forward(batch)
-                    loss = self.loss(batch, x_recon, mu=mu, logvar=logvar, z=z)
-                    epoch_val_loss += loss.item()
+                    loss_dict = self.loss(batch, x_recon, mu=mu, logvar=logvar, z=z, return_parts=True)
+                    
+                    for k in epoch_losses:
+                        epoch_losses[k] += loss_dict[k].item()
             
-            avg_val_loss = epoch_val_loss / len(val_loader)
-            val_losses.append(avg_val_loss)
+            for k in epoch_losses:
+                history[f'val_{k}'].append(epoch_losses[k] / len(val_loader))
             
             if verbose and (epoch + 1) % 10 == 0:
-                print(f"Epoch {epoch + 1}/{epochs}, Train: {avg_train_loss:.6f}, Val: {avg_val_loss:.6f}")
+                print(f"Epoch {epoch + 1}/{epochs} | "
+                      f"Train - Total: {history['train_total'][-1]:.4f}, Recon: {history['train_recon'][-1]:.4f}, "
+                      f"MI: {history['train_mi'][-1]:.4f}, TC: {history['train_tc'][-1]:.4f}, KL: {history['train_kl'][-1]:.4f} | "
+                      f"Val - Total: {history['val_total'][-1]:.4f}")
         
         self.eval()
-        return {'train_losses': train_losses, 'val_losses': val_losses}
+        return history
