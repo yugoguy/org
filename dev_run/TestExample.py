@@ -123,15 +123,18 @@ def single_ga_run(toolbox, problem):
 
 def generate_fn(toolbox, problem):
     """Repeatedly run GA until NUM_DATA_POINTS feasible solutions collected."""
+    from tqdm import tqdm
+    
     dataset = []
+    pbar = tqdm(total=NUM_DATA_POINTS, desc="Generating data")
     
     while len(dataset) < NUM_DATA_POINTS:
         valid_data = single_ga_run(toolbox, problem)
         if valid_data is not None:
             dataset.append(np.array(valid_data))
-            if len(dataset) % 100 == 0:
-                print(f"Data points generated: {len(dataset)}/{NUM_DATA_POINTS}")
+            pbar.update(1)
     
+    pbar.close()
     return dataset
 
 # =============================================================================
