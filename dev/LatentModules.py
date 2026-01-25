@@ -107,20 +107,45 @@ class BetaTCVAE(LatentModule):
         
         return total_loss
     
-    def fit(self, dataset, epochs=100, batch_size=32, lr=1e-3, device='cpu', verbose=True):
-        """Training loop for VAE."""
-        self.to(device)
-        self.train()
+    def fit(self, dataset, epochs=100, batch_size=32, lr=1e-3, device='cpu', verbose=True, val_split=0.2):
+        """
+        Training loop with validation.
         
+        Args:
+            dataset: list of numpy arrays
+            epochs: number of training epochs
+            batch_size: batch size
+            lr: learning rate
+            device: 'cpu' or 'cuda'
+            verbose: print loss during training
+            val_split: fraction for validation set
+        
+        Returns:
+            dict with 'train_losses' and 'val_losses' per epoch
+        """
+        self.to(device)
+        
+        # Convert dataset to tensor and split
         data = torch.tensor(np.array(dataset), dtype=torch.float32)
-        data_loader = torch.utils.data.DataLoader(data, batch_size=batch_size, shuffle=True, drop_last=True)
+        n_val = int(len(data) * val_split)
+        n_train = len(data) - n_val
+        
+        indices = torch.randperm(len(data))
+        train_data = data[indices[:n_train]]
+        val_data = data[indices[n_train:]]
+        
+        train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, drop_last=True)
+        val_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size, shuffle=False, drop_last=True)
         
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
-        losses = []
+        train_losses = []
+        val_losses = []
         
         for epoch in range(epochs):
-            epoch_loss = 0.0
-            for batch in data_loader:
+            # Training
+            self.train()
+            epoch_train_loss = 0.0
+            for batch in train_loader:
                 batch = batch.to(device)
                 optimizer.zero_grad()
                 
@@ -129,13 +154,26 @@ class BetaTCVAE(LatentModule):
                 
                 loss.backward()
                 optimizer.step()
-                epoch_loss += loss.item()
+                epoch_train_loss += loss.item()
             
-            avg_loss = epoch_loss / len(data_loader)
-            losses.append(avg_loss)
+            avg_train_loss = epoch_train_loss / len(train_loader)
+            train_losses.append(avg_train_loss)
+            
+            # Validation
+            self.eval()
+            epoch_val_loss = 0.0
+            with torch.no_grad():
+                for batch in val_loader:
+                    batch = batch.to(device)
+                    x_recon, mu, logvar, z = self.forward(batch)
+                    loss = self.loss(batch, x_recon, mu=mu, logvar=logvar, z=z)
+                    epoch_val_loss += loss.item()
+            
+            avg_val_loss = epoch_val_loss / len(val_loader)
+            val_losses.append(avg_val_loss)
             
             if verbose and (epoch + 1) % 10 == 0:
-                print(f"Epoch {epoch + 1}/{epochs}, Loss: {avg_loss:.6f}")
+                print(f"Epoch {epoch + 1}/{epochs}, Train: {avg_train_loss:.6f}, Val: {avg_val_loss:.6f}")
         
         self.eval()
-        return losses
+        return {'train_losses': train_losses, 'val_losses': val_losses}
