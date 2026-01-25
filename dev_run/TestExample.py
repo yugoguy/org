@@ -3,6 +3,7 @@
 import numpy as np
 import random
 import torch
+from tqdm import tqdm
 from deap import base, creator, tools
 
 # =============================================================================
@@ -123,8 +124,6 @@ def single_ga_run(toolbox, problem):
 
 def generate_fn(toolbox, problem):
     """Repeatedly run GA until NUM_DATA_POINTS feasible solutions collected."""
-    from tqdm import tqdm
-    
     dataset = []
     pbar = tqdm(total=NUM_DATA_POINTS, desc="Generating data")
     
