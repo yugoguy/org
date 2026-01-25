@@ -1,6 +1,7 @@
 import numpy as np
 import random
 import torch
+from sklearn.preprocessing import MinMaxScaler
 
 class LVE:
     """
@@ -24,6 +25,7 @@ class LVE:
         self.init_from_dataset = init_from_dataset
         self.init_epsilon = init_epsilon
         self.dataset = None
+        self.scaler = MinMaxScaler(feature_range=(0, 1))
     
     def regenerate(self):
         """Regenerate dataset using DataGeneration."""
@@ -39,14 +41,19 @@ class LVE:
             **kwargs: passed to latent_module.fit()
         
         Returns:
-            list of losses per epoch
+            dict with train/val losses per epoch
         """
         if dataset is None:
             if self.dataset is None:
                 self.regenerate()
             dataset = self.dataset
         
-        return self.latent_module.fit(dataset, device=self.device, **kwargs)
+        # Fit scaler on actual data and normalize
+        data_array = np.array(dataset)
+        self.scaler.fit(data_array)
+        normalized_dataset = self.scaler.transform(data_array).tolist()
+        
+        return self.latent_module.fit(normalized_dataset, device=self.device, **kwargs)
     
     def retrain(self, **kwargs):
         """Regenerate dataset and retrain module."""
@@ -58,14 +65,16 @@ class LVE:
         Encode population to latent space.
         
         Args:
-            population: list of individuals (lists or arrays)
+            population: list of individuals (lists or arrays) in original space
         
         Returns:
             numpy array of latent vectors
         """
         self.latent_module.eval()
+        # Normalize before encoding
+        normalized = self.scaler.transform(np.array(population))
         with torch.no_grad():
-            x = torch.tensor(np.array(population), dtype=torch.float32).to(self.device)
+            x = torch.tensor(normalized, dtype=torch.float32).to(self.device)
             z = self.latent_module.encode(x)
         return z.cpu().numpy()
     
@@ -83,12 +92,15 @@ class LVE:
         with torch.no_grad():
             z = torch.tensor(np.array(latent_population), dtype=torch.float32).to(self.device)
             x = self.latent_module.decode(z)
-        return x.cpu().numpy()
+        # Inverse transform to original space
+        return self.scaler.inverse_transform(x.cpu().numpy())
     
     def _sample_latent_from_dataset(self):
         """Sample one latent vector from encoded dataset."""
         idx = random.randint(0, len(self.dataset) - 1)
-        x = torch.tensor(self.dataset[idx], dtype=torch.float32).unsqueeze(0).to(self.device)
+        # Normalize the sample
+        normalized = self.scaler.transform([self.dataset[idx]])
+        x = torch.tensor(normalized, dtype=torch.float32).to(self.device)
         self.latent_module.eval()
         with torch.no_grad():
             if hasattr(self.latent_module, 'encode_dist'):
