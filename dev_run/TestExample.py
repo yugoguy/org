@@ -14,12 +14,13 @@ X_MIN = -50.0  #@param {type:"number"}
 X_MAX = 50.0  #@param {type:"number"}
 
 # Data Generation GA
+NUM_DATA_POINTS = 1000  #@param {type:"integer"}
 POP_SIZE_DATA = 100  #@param {type:"integer"}
 N_GEN_DATA = 50  #@param {type:"integer"}
-CXPB_DATA = 0.7  #@param {type:"number"}
+CXPB_DATA = 0.5  #@param {type:"number"}
 MUTPB_DATA = 0.2  #@param {type:"number"}
 TOURNSIZE_DATA = 3  #@param {type:"integer"}
-INDPB_DATA = 0.1  #@param {type:"number"}
+INDPB_DATA = 0.2  #@param {type:"number"}
 
 # Latent Module
 LATENT_DIM = 5  #@param {type:"integer"}
@@ -75,16 +76,14 @@ toolbox_data.register("mutate", tools.mutGaussian, mu=0, sigma=10, indpb=INDPB_D
 # =============================================================================
 # Generate Function for Data Generation
 # =============================================================================
-def generate_fn(toolbox, problem):
-    """GA loop for dataset generation."""
-    dataset = []
+def single_ga_run(toolbox, problem):
+    """Single GA run minimizing constraint. Returns best individual if feasible, else None."""
     pop = toolbox.population(n=POP_SIZE_DATA)
     
+    # Evaluate using constraint as fitness
     for ind in pop:
-        fit, feasible = problem.evaluate(ind)
-        ind.fitness.values = (fit,)
-        if feasible:
-            dataset.append(np.array(ind))
+        constraint_val = problem.constraint(ind)
+        ind.fitness.values = (abs(constraint_val),)  # minimize |constraint|
     
     for gen in range(N_GEN_DATA):
         offspring = toolbox.select(pop, len(pop))
@@ -107,17 +106,31 @@ def generate_fn(toolbox, problem):
         
         for ind in offspring:
             if not ind.fitness.valid:
-                fit, feasible = problem.evaluate(ind)
-                ind.fitness.values = (fit,)
-                if feasible:
-                    dataset.append(np.array(ind))
-        
-        if problem.constraint_handling == 'rejection':
-            feasible_offspring = [ind for ind in offspring if problem.is_feasible(ind)]
-            if len(feasible_offspring) >= 2:
-                offspring = feasible_offspring
+                constraint_val = problem.constraint(ind)
+                ind.fitness.values = (abs(constraint_val),)
         
         pop[:] = offspring
+        
+        # Early stop if constraint satisfied
+        best_ind = tools.selBest(pop, 1)[0]
+        if best_ind.fitness.values[0] == 0.0:
+            break
+    
+    best_ind = tools.selBest(pop, 1)[0]
+    if problem.is_feasible(best_ind):
+        return best_ind
+    return None
+
+def generate_fn(toolbox, problem):
+    """Repeatedly run GA until NUM_DATA_POINTS feasible solutions collected."""
+    dataset = []
+    
+    while len(dataset) < NUM_DATA_POINTS:
+        valid_data = single_ga_run(toolbox, problem)
+        if valid_data is not None:
+            dataset.append(np.array(valid_data))
+            if len(dataset) % 100 == 0:
+                print(f"Data points generated: {len(dataset)}/{NUM_DATA_POINTS}")
     
     return dataset
 
