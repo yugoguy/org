@@ -145,130 +145,78 @@ toolbox_lve.register("mutate", tools.mutGaussian, mu=0, sigma=0.5, indpb=INDPB_L
 # =============================================================================
 # Evolve Function for LVE
 # =============================================================================
-def calculate_values(ind, lve):
-    """Calculate objective and constraint for a decoded individual."""
-    problem = lve.data_generation.problem
-    decoded = lve.decode([ind])[0]
-    return {
-        'obj': problem.fitness(decoded),
-        'constraint': problem.constraint(decoded)
-    }
-
-def play(ind0, ind1):
-    """Tournament match: compare objective and constraint."""
-    # Objective comparison (minimization)
-    if ind0.calculated_values['obj'] == ind1.calculated_values['obj']:
-        ind0.gathered_score += 1
-        ind1.gathered_score += 1
-    elif ind0.calculated_values['obj'] < ind1.calculated_values['obj']:
-        ind0.gathered_score += 1
-    else:
-        ind1.gathered_score += 1
-    
-    # Constraint comparison (0 = satisfied, want <= 0)
-    c0 = ind0.calculated_values['constraint']
-    c1 = ind1.calculated_values['constraint']
-    
-    c0_feasible = c0 <= 0
-    c1_feasible = c1 <= 0
-    
-    if not c0_feasible and not c1_feasible:  # both infeasible
-        if c0 < c1:
-            ind0.gathered_score += 1
-        else:
-            ind1.gathered_score += 1
-    else:
-        if c0_feasible:
-            ind0.gathered_score += 1
-        if c1_feasible:
-            ind1.gathered_score += 1
-    
-    ind0.num_matches += 1
-    ind1.num_matches += 1
-
 def evolve_fn(toolbox, lve, pop_size, n_gen):
-    """LVE loop in latent space with tournament-based constraint handling."""
+    """LVE loop in latent space with feasibility filter."""
     problem = lve.data_generation.problem
     
     # Initialize population using LVE method
     pop = lve.init_population(pop_size)
     
-    # Calculate values and initialize scores
+    # Evaluate initial population
     for ind in pop:
-        ind.calculated_values = calculate_values(ind, lve)
-        ind.gathered_score = 0
-        ind.num_matches = 0
-    
-    # Initial tournament
-    for ind in pop:
-        participants = random.sample(pop, min(5, len(pop)))
-        for _ in range(10):
-            duel = random.sample(participants, 2)
-            play(duel[0], duel[1])
-    
-    # Set fitness (maximizing score)
-    for ind in pop:
-        if ind.num_matches == 0:
-            ind.fitness.values = (0,)
-        else:
-            ind.fitness.values = (ind.gathered_score / ind.num_matches,)
+        decoded = lve.decode([ind])[0]
+        decoded = np.clip(decoded, X_MIN, X_MAX)
+        fit = problem.fitness(decoded)
+        feasible = problem.is_feasible(decoded)
+        # Infeasible gets large penalty
+        if not feasible:
+            fit += 1e9 + abs(problem.constraint(decoded)) * 1e6
+        ind.fitness.values = (-fit,)  # negative for maximization
     
     best_obj = float('inf')
     
     for gen in range(n_gen):
-        offspring = toolbox.select(pop, len(pop))
+        # Elitism
+        elite = tools.selBest(pop, ELITE_SIZE)
+        elite = list(map(toolbox.clone, elite))
+        
+        # Selection and offspring
+        offspring = toolbox.select(pop, len(pop) - ELITE_SIZE)
         offspring = list(map(toolbox.clone, offspring))
         
+        # Crossover
         for i in range(0, len(offspring) - 1, 2):
             if random.random() < CXPB_LVE:
                 toolbox.mate(offspring[i], offspring[i + 1])
                 del offspring[i].fitness.values
                 del offspring[i + 1].fitness.values
         
+        # Mutation
         for mutant in offspring:
             if random.random() < MUTPB_LVE:
                 toolbox.mutate(mutant)
                 del mutant.fitness.values
         
-        # Recalculate all values and reset scores
+        # Evaluate offspring
         for ind in offspring:
-            ind.calculated_values = calculate_values(ind, lve)
-            ind.gathered_score = 0
-            ind.num_matches = 0
+            if not ind.fitness.valid:
+                decoded = lve.decode([ind])[0]
+                decoded = np.clip(decoded, X_MIN, X_MAX)
+                fit = problem.fitness(decoded)
+                feasible = problem.is_feasible(decoded)
+                if not feasible:
+                    fit += 1e9 + abs(problem.constraint(decoded)) * 1e6
+                ind.fitness.values = (-fit,)
         
-        # Tournament
-        for ind in offspring:
-            participants = random.sample(offspring, min(5, len(offspring)))
-            for _ in range(10):
-                duel = random.sample(participants, 2)
-                play(duel[0], duel[1])
-        
-        # Set fitness
-        for ind in offspring:
-            if ind.num_matches == 0:
-                ind.fitness.values = (0,)
-            else:
-                ind.fitness.values = (ind.gathered_score / ind.num_matches,)
-        
-        pop[:] = offspring
+        # Combine elite and offspring
+        pop[:] = elite + offspring
         
         # Track best feasible objective
         for ind in pop:
-            if ind.calculated_values['constraint'] <= 0:
-                if ind.calculated_values['obj'] < best_obj:
-                    best_obj = ind.calculated_values['obj']
+            decoded = lve.decode([ind])[0]
+            decoded = np.clip(decoded, X_MIN, X_MAX)
+            if problem.is_feasible(decoded):
+                obj = problem.fitness(decoded)
+                if obj < best_obj:
+                    best_obj = obj
         
         if (gen + 1) % 10 == 0:
             print(f"LVE Gen {gen + 1}/{n_gen}, Best feasible obj: {best_obj:.4f}")
     
-    # Return best feasible solution, or best overall if none feasible
-    feasible = [ind for ind in pop if ind.calculated_values['constraint'] <= 0]
-    if feasible:
-        best_ind = min(feasible, key=lambda x: x.calculated_values['obj'])
-    else:
-        best_ind = min(pop, key=lambda x: x.calculated_values['constraint'])
-    
-    return lve.decode([best_ind])[0]
+    # Return best feasible solution
+    best_ind = max(pop, key=lambda x: x.fitness.values[0])
+    decoded = lve.decode([best_ind])[0]
+    return np.clip(decoded, X_MIN, X_MAX)
 
 # =============================================================================
 # Full Run
