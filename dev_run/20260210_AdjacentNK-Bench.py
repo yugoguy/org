@@ -106,3 +106,20 @@ for gen in range(N_GEN):
 best_ind = max(pop, key=lambda x: x.fitness.values[0])
 print(f"\nBest solution: {best_ind}")
 print(f"Best fitness (NK, higher=better): {-problem.fitness(best_ind):.4f}")
+
+# =============================================================================
+# Plot
+# =============================================================================
+import matplotlib.pyplot as plt
+
+gens = range(len(history['fitness']['mean']))
+plt.figure(figsize=(7, 5))
+plt.plot(gens, history['fitness']['mean'], label='Mean')
+plt.plot(gens, history['fitness']['min'], label='Min')
+plt.plot(gens, history['fitness']['max'], label='Max')
+plt.xlabel('Generation')
+plt.ylabel('Fitness')
+plt.title('Fitness over Generations (Baseline GA)')
+plt.legend()
+plt.tight_layout()
+plt.show()
