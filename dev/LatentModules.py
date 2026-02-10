@@ -193,3 +193,126 @@ class BetaTCVAE(LatentModule):
         
         self.eval()
         return history
+
+
+
+class BinaryBetaVAE(LatentModule):
+    """
+    Beta-VAE for binary data.
+    Sigmoid output with BCE reconstruction loss.
+    Loss = BCE + beta * KL
+    
+    Args:
+        input_dim: number of binary loci
+        latent_dim: latent space dimension
+        hidden_dim: hidden layer size
+        beta: KL weight
+    """
+    
+    def __init__(self, input_dim, latent_dim, hidden_dim=32, beta=1.0):
+        super().__init__(input_dim, latent_dim)
+        self.beta = beta
+        
+        self.encoder_net = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+        )
+        self.fc_mu = nn.Linear(hidden_dim, latent_dim)
+        self.fc_logvar = nn.Linear(hidden_dim, latent_dim)
+        
+        self.decoder_net = nn.Sequential(
+            nn.Linear(latent_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, input_dim),
+        )
+    
+    def encode(self, x):
+        """Returns mu."""
+        h = self.encoder_net(x)
+        return self.fc_mu(h)
+    
+    def encode_dist(self, x):
+        """Returns mu and clamped logvar."""
+        h = self.encoder_net(x)
+        mu = self.fc_mu(h)
+        logvar = torch.clamp(self.fc_logvar(h), min=-20, max=2)
+        return mu, logvar
+    
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        return mu + torch.randn_like(std) * std
+    
+    def decode(self, z):
+        """Returns sigmoid probabilities."""
+        return torch.sigmoid(self.decoder_net(z))
+    
+    def forward(self, x):
+        mu, logvar = self.encode_dist(x)
+        z = self.reparameterize(mu, logvar)
+        x_recon = self.decode(z)
+        return x_recon, mu, logvar, z
+    
+    def loss(self, x, x_recon, mu=None, logvar=None, z=None, return_parts=False, **kwargs):
+        recon_loss = F.binary_cross_entropy(x_recon, x, reduction='mean')
+        kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+        total = recon_loss + self.beta * kl_loss
+        
+        if return_parts:
+            return {'total': total, 'recon': recon_loss, 'kl': kl_loss}
+        return total
+    
+    def fit(self, dataset, epochs=100, batch_size=32, lr=1e-3, device='cpu', verbose=True, val_split=0.2):
+        self.to(device)
+        
+        data = torch.tensor(np.array(dataset), dtype=torch.float32)
+        n_val = int(len(data) * val_split)
+        n_train = len(data) - n_val
+        
+        indices = torch.randperm(len(data))
+        train_data = data[indices[:n_train]]
+        val_data = data[indices[n_train:]]
+        
+        train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, drop_last=True)
+        val_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size, shuffle=False, drop_last=True)
+        
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        
+        history = {
+            'train_total': [], 'train_recon': [], 'train_kl': [],
+            'val_total': [], 'val_recon': [], 'val_kl': []
+        }
+        
+        for epoch in range(epochs):
+            self.train()
+            epoch_losses = {'total': 0, 'recon': 0, 'kl': 0}
+            for batch in train_loader:
+                batch = batch.to(device)
+                optimizer.zero_grad()
+                x_recon, mu, logvar, z = self.forward(batch)
+                loss_dict = self.loss(batch, x_recon, mu=mu, logvar=logvar, z=z, return_parts=True)
+                loss_dict['total'].backward()
+                optimizer.step()
+                for k in epoch_losses:
+                    epoch_losses[k] += loss_dict[k].item()
+            for k in epoch_losses:
+                history[f'train_{k}'].append(epoch_losses[k] / len(train_loader))
+            
+            self.eval()
+            epoch_losses = {'total': 0, 'recon': 0, 'kl': 0}
+            with torch.no_grad():
+                for batch in val_loader:
+                    batch = batch.to(device)
+                    x_recon, mu, logvar, z = self.forward(batch)
+                    loss_dict = self.loss(batch, x_recon, mu=mu, logvar=logvar, z=z, return_parts=True)
+                    for k in epoch_losses:
+                        epoch_losses[k] += loss_dict[k].item()
+            for k in epoch_losses:
+                history[f'val_{k}'].append(epoch_losses[k] / len(val_loader))
+            
+            if verbose and (epoch + 1) % 10 == 0:
+                print(f"Epoch {epoch+1}/{epochs} | "
+                      f"Train - Total: {history['train_total'][-1]:.4f}, Recon: {history['train_recon'][-1]:.4f}, KL: {history['train_kl'][-1]:.4f} | "
+                      f"Val - Total: {history['val_total'][-1]:.4f}")
+        
+        self.eval()
+        return history
