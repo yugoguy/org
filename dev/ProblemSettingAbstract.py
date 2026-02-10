@@ -24,9 +24,17 @@ class ProblemSetting(ABC):
         """Return constraint value. Feasible if <= 0."""
         pass
     
+    def has_constraint(self):
+        """Whether this problem has constraints. Override to return False if unconstrained."""
+        return True
+    
     def is_feasible(self, x):
         """Check if solution satisfies constraint."""
         return self.constraint(x) <= 0
+    
+    def constraint_violation(self, x):
+        """Return constraint violation (0 if feasible)."""
+        return max(0, self.constraint(x))
     
     def evaluate(self, x):
         """
@@ -37,6 +45,6 @@ class ProblemSetting(ABC):
         feasible = self.is_feasible(x)
         
         if self.constraint_handling == 'penalty' and not feasible:
-            fit += self.penalty_coef * max(0, self.constraint(x))
+            fit += self.penalty_coef * self.constraint_violation(x)
         
         return fit, feasible
