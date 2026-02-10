@@ -73,3 +73,36 @@ class NKLandscape(ProblemSetting):
     
     def has_constraint(self):
         return False
+
+
+class C2NKLandscape(NKLandscape):
+    """
+    NK Landscape with two-sided ratio constraint on fraction of 1s.
+    Constraint: ratio_min <= sum(x)/n <= ratio_max
+    
+    Args:
+        n, k, adjacent, seed: same as NKLandscape
+        ratio_min: minimum fraction of 1s
+        ratio_max: maximum fraction of 1s
+        penalty_coef: penalty coefficient for constraint violation
+    """
+    
+    def __init__(self, n, k, adjacent=True, seed=None, ratio_min=0.1, ratio_max=0.3, penalty_coef=1e3):
+        super().__init__(n, k, adjacent, seed)
+        self.constraint_handling = 'penalty'
+        self.penalty_coef = penalty_coef
+        self.ratio_min = ratio_min
+        self.ratio_max = ratio_max
+    
+    def constraint(self, x):
+        """
+        Two-sided ratio constraint.
+        Returns max violation (>0 means infeasible, <=0 means feasible).
+        """
+        ratio = sum(int(xi) for xi in x) / self.n
+        lower_violation = self.ratio_min - ratio
+        upper_violation = ratio - self.ratio_max
+        return max(lower_violation, upper_violation)
+    
+    def has_constraint(self):
+        return True
