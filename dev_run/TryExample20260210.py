@@ -27,8 +27,8 @@ INDPB_DATA = 0.2  #@param {type:"number"}
 LATENT_DIM = 5  #@param {type:"integer"}
 HIDDEN_DIM = 32  #@param {type:"integer"}
 EPOCHS = 100  #@param {type:"integer"}
-BATCH_SIZE = 32  #@param {type:"integer"}
-LR = 1e-3  #@param {type:"number"}
+BATCH_SIZE = 128  #@param {type:"integer"}
+LR = 5e-3  #@param {type:"number"}
 VAL_SPLIT = 0.2  #@param {type:"number"}
 
 # BetaTCVAE Loss Weights (alpha=beta=gamma=1 -> standard VAE)
@@ -37,8 +37,8 @@ BETA = 1.0  #@param {type:"number"}
 GAMMA = 1.0  #@param {type:"number"}
 
 # LVE GA
-POP_SIZE_LVE = 50  #@param {type:"integer"}
-N_GEN_LVE = 30  #@param {type:"integer"}
+POP_SIZE_LVE = 100  #@param {type:"integer"}
+N_GEN_LVE = 200  #@param {type:"integer"}
 CXPB_LVE = 0.7  #@param {type:"number"}
 MUTPB_LVE = 0.3  #@param {type:"number"}
 TOURNSIZE_LVE = 3  #@param {type:"integer"}
