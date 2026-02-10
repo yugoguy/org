@@ -2,6 +2,7 @@ import numpy as np
 import random
 import torch
 from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
 
 class LVE:
     """
@@ -26,6 +27,7 @@ class LVE:
         self.init_epsilon = init_epsilon
         self.dataset = None
         self.scaler = MinMaxScaler(feature_range=(0, 1))
+        self.evolution_history = None
     
     def regenerate(self):
         """Regenerate dataset using DataGeneration."""
@@ -143,10 +145,57 @@ class LVE:
         Args:
             pop_size: population size
             n_gen: number of generations
-            evolve_fn: function(toolbox, lve, pop_size, n_gen) -> final population
-                       lve is passed so evolve_fn can use encode/decode/init_population
+            evolve_fn: function(toolbox, lve, pop_size, n_gen) -> best solution
+                       evolve_fn should store history in lve.evolution_history
         
         Returns:
-            final population in original space (numpy array)
+            best solution in original space (numpy array)
         """
         return evolve_fn(self.toolbox, self, pop_size, n_gen)
+    
+    def plot_evolution(self, save_path=None):
+        """
+        Plot evolution history: fitness and constraint violation over generations.
+        
+        Args:
+            save_path: if provided, save figure to this path instead of showing
+        """
+        if self.evolution_history is None:
+            print("No evolution history available.")
+            return
+        
+        has_constraint = 'constraint' in self.evolution_history
+        n_plots = 2 if has_constraint else 1
+        fig, axes = plt.subplots(1, n_plots, figsize=(7 * n_plots, 5))
+        if n_plots == 1:
+            axes = [axes]
+        
+        gens = range(len(self.evolution_history['fitness']['mean']))
+        
+        # Fitness plot
+        ax = axes[0]
+        ax.plot(gens, self.evolution_history['fitness']['mean'], label='Mean')
+        ax.plot(gens, self.evolution_history['fitness']['min'], label='Min')
+        ax.plot(gens, self.evolution_history['fitness']['max'], label='Max')
+        ax.set_xlabel('Generation')
+        ax.set_ylabel('Fitness')
+        ax.set_title('Fitness over Generations')
+        ax.legend()
+        
+        # Constraint plot
+        if has_constraint:
+            ax = axes[1]
+            ax.plot(gens, self.evolution_history['constraint']['mean'], label='Mean')
+            ax.plot(gens, self.evolution_history['constraint']['min'], label='Min')
+            ax.plot(gens, self.evolution_history['constraint']['max'], label='Max')
+            ax.set_xlabel('Generation')
+            ax.set_ylabel('Constraint Violation')
+            ax.set_title('Constraint Violation over Generations')
+            ax.legend()
+        
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, bbox_inches='tight')
+        else:
+            plt.show()
+        plt.close()
