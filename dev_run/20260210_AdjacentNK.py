@@ -1,4 +1,4 @@
-#@title Example
+#@title Example 
 
 import numpy as np
 import random
@@ -10,47 +10,40 @@ from deap import base, creator, tools
 # Hyperparameters
 # =============================================================================
 # NK Landscape
-N = 20
-K = 5
-ADJACENT = True
-NK_SEED = 42
+N = 20  #@param {type:"integer"}
+K = 5  #@param {type:"integer"}
+ADJACENT = True  #@param {type:"boolean"}
+NK_SEED = 42  #@param {type:"integer"}
 
-# Data Generation
-NUM_DATA_POINTS = 1000
-POP_SIZE_DATA = 100
-N_GEN_DATA = 50
-CXPB_DATA = 0.5
-MUTPB_DATA = 0.2
-TOURNSIZE_DATA = 3
-FLIPBIT_INDPB = 0.1
-GROUP_SIZE = 20
-TOP_K_PER_GROUP = 5
+# Data Generation (random sampling, keep top-k)
+NUM_RANDOM_SAMPLES = 10000  #@param {type:"integer"}
+NUM_DATA_POINTS = 1000  #@param {type:"integer"}
 
 # Latent Module
-LATENT_DIM = 10
-HIDDEN_DIM = 64
-EPOCHS = 100
-BATCH_SIZE = 128
-LR = 1e-3
-VAL_SPLIT = 0.2
-BETA_VAE = 1.0
+LATENT_DIM = 10  #@param {type:"integer"}
+HIDDEN_DIM = 64  #@param {type:"integer"}
+EPOCHS = 100  #@param {type:"integer"}
+BATCH_SIZE = 128  #@param {type:"integer"}
+LR = 1e-3  #@param {type:"number"}
+VAL_SPLIT = 0.2  #@param {type:"number"}
+BETA_VAE = 1.0  #@param {type:"number"}
 
 # LVE GA
-POP_SIZE_LVE = 100
-N_GEN_LVE = 200
-CXPB_LVE = 0.7
-MUTPB_LVE = 0.3
-TOURNSIZE_LVE = 3
-INDPB_LVE = 0.2
-ELITE_SIZE = 5
+POP_SIZE_LVE = 100  #@param {type:"integer"}
+N_GEN_LVE = 200  #@param {type:"integer"}
+CXPB_LVE = 0.7  #@param {type:"number"}
+MUTPB_LVE = 0.3  #@param {type:"number"}
+TOURNSIZE_LVE = 3  #@param {type:"integer"}
+INDPB_LVE = 0.2  #@param {type:"number"}
+ELITE_SIZE = 5  #@param {type:"integer"}
 
 # LVE Initialization
-INIT_FROM_DATASET = False
-INIT_EPSILON = 0.0
+INIT_FROM_DATASET = False  #@param {type:"boolean"}
+INIT_EPSILON = 0.0  #@param {type:"number"}
 
 # General
-SEED = 42
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+SEED = 42  #@param {type:"integer"}
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'  #@param {type:"string"}
 
 random.seed(SEED)
 np.random.seed(SEED)
@@ -62,7 +55,19 @@ torch.manual_seed(SEED)
 problem = NKLandscape(n=N, k=K, adjacent=ADJACENT, seed=NK_SEED)
 
 # =============================================================================
-# DEAP Setup for Data Generation (binary)
+# Data Generation (random sampling, keep top-k)
+# =============================================================================
+toolbox_data = base.Toolbox()
+
+def generate_fn(toolbox, problem):
+    """Randomly sample binary strings, keep top NUM_DATA_POINTS by fitness."""
+    samples = np.random.randint(0, 2, size=(NUM_RANDOM_SAMPLES, N))
+    fitnesses = np.array([problem.fitness(s) for s in samples])
+    top_indices = np.argsort(fitnesses)[:NUM_DATA_POINTS]
+    return [samples[i].astype(np.float32) for i in top_indices]
+
+# =============================================================================
+# DEAP Setup for LVE (continuous latent space)
 # =============================================================================
 if hasattr(creator, "FitnessMax"):
     del creator.FitnessMax
@@ -71,95 +76,6 @@ if hasattr(creator, "Individual"):
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", list, fitness=creator.FitnessMax)
-
-toolbox_data = base.Toolbox()
-toolbox_data.register("attr_bit", random.randint, 0, 1)
-toolbox_data.register("individual", tools.initRepeat, creator.Individual, toolbox_data.attr_bit, n=N)
-toolbox_data.register("population", tools.initRepeat, list, toolbox_data.individual)
-toolbox_data.register("select", tools.selTournament, tournsize=TOURNSIZE_DATA)
-toolbox_data.register("mate", tools.cxUniform, indpb=0.5)
-toolbox_data.register("mutate", tools.mutFlipBit, indpb=FLIPBIT_INDPB)
-
-# =============================================================================
-# Data Generation Function (diversified grouping)
-# =============================================================================
-def generate_fn(toolbox, problem):
-    """
-    Generate diverse dataset via grouping-based selection.
-    Run a GA, then repeatedly group population randomly and select top-k per group.
-    """
-    pop = toolbox.population(n=POP_SIZE_DATA)
-    
-    # Evaluate initial population
-    for ind in pop:
-        ind.fitness.values = (-problem.fitness(ind),)  # negate: problem minimizes, DEAP maximizes
-    
-    # Run GA to get a decent population
-    for gen in range(N_GEN_DATA):
-        offspring = toolbox.select(pop, len(pop))
-        offspring = list(map(toolbox.clone, offspring))
-        
-        for i in range(0, len(offspring) - 1, 2):
-            if random.random() < CXPB_DATA:
-                toolbox.mate(offspring[i], offspring[i + 1])
-                del offspring[i].fitness.values
-                del offspring[i + 1].fitness.values
-        
-        for mutant in offspring:
-            if random.random() < MUTPB_DATA:
-                toolbox.mutate(mutant)
-                del mutant.fitness.values
-        
-        for ind in offspring:
-            if not ind.fitness.valid:
-                ind.fitness.values = (-problem.fitness(ind),)
-        
-        pop[:] = offspring
-    
-    # Collect dataset via grouping
-    dataset = []
-    pbar = tqdm(total=NUM_DATA_POINTS, desc="Generating data")
-    
-    while len(dataset) < NUM_DATA_POINTS:
-        # Shuffle and group
-        random.shuffle(pop)
-        for g_start in range(0, len(pop), GROUP_SIZE):
-            if len(dataset) >= NUM_DATA_POINTS:
-                break
-            group = pop[g_start:g_start + GROUP_SIZE]
-            if len(group) < TOP_K_PER_GROUP:
-                continue
-            # Select top-k by fitness
-            top = tools.selBest(group, TOP_K_PER_GROUP)
-            for ind in top:
-                if len(dataset) >= NUM_DATA_POINTS:
-                    break
-                dataset.append(np.array(ind, dtype=np.float32))
-                pbar.update(1)
-        
-        # Evolve population further for more diversity
-        offspring = toolbox.select(pop, len(pop))
-        offspring = list(map(toolbox.clone, offspring))
-        for i in range(0, len(offspring) - 1, 2):
-            if random.random() < CXPB_DATA:
-                toolbox.mate(offspring[i], offspring[i + 1])
-                del offspring[i].fitness.values
-                del offspring[i + 1].fitness.values
-        for mutant in offspring:
-            if random.random() < MUTPB_DATA:
-                toolbox.mutate(mutant)
-                del mutant.fitness.values
-        for ind in offspring:
-            if not ind.fitness.valid:
-                ind.fitness.values = (-problem.fitness(ind),)
-        pop[:] = offspring
-    
-    pbar.close()
-    return dataset
-
-# =============================================================================
-# DEAP Setup for LVE (continuous latent space)
-# =============================================================================
 toolbox_lve = base.Toolbox()
 toolbox_lve.register("attr_latent", random.uniform, -2, 2)
 toolbox_lve.register("individual", tools.initRepeat, creator.Individual, toolbox_lve.attr_latent, n=LATENT_DIM)
