@@ -44,6 +44,7 @@ MUTPB_LVE = 0.3  #@param {type:"number"}
 TOURNSIZE_LVE = 3  #@param {type:"integer"}
 INDPB_LVE = 0.2  #@param {type:"number"}
 ELITE_SIZE = 5  #@param {type:"integer"}
+PENALTY_COEF = 1  #@param {type:"number"}
 
 # LVE Initialization
 INIT_FROM_DATASET = False  #@param {type:"boolean"}
@@ -270,7 +271,7 @@ def evolve_fn(toolbox, lve, pop_size, n_gen):
 print("=" * 50)
 print("Step 1: Data Generation")
 print("=" * 50)
-problem = SphereProblem(dim=DIM, constraint_handling='penalty')
+problem = SphereProblem(dim=DIM, constraint_handling='penalty', penalty_coef=PENALTY_COEF)
 data_gen = DataGeneration(problem, toolbox_data, generate_fn)
 dataset = data_gen.generate()
 print(f"Dataset size: {len(dataset)}")
