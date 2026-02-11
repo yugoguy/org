@@ -30,7 +30,7 @@ EPOCHS = 100  #@param {type:"integer"}
 BATCH_SIZE = 128  #@param {type:"integer"}
 LR = 1e-3  #@param {type:"number"}
 VAL_SPLIT = 0.2  #@param {type:"number"}
-BETA_VAE = 1.0  #@param {type:"number"}
+BETA_VAE = 1e-1  #@param {type:"number"}
 
 # LVE GA
 POP_SIZE_LVE = 100  #@param {type:"integer"}
