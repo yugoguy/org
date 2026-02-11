@@ -10,7 +10,7 @@ class ProblemSetting(ABC):
         penalty_coef: coefficient for penalty (used if constraint_handling='penalty')
     """
     
-    def __init__(self, constraint_handling='rejection', penalty_coef=1e6):
+    def __init__(self, constraint_handling='rejection', penalty_coef=1):
         self.constraint_handling = constraint_handling
         self.penalty_coef = penalty_coef
     
