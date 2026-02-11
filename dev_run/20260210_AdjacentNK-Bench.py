@@ -19,8 +19,7 @@ N_GEN = 200  #@param {type:"integer"}
 CXPB = 0.7  #@param {type:"number"}
 MUTPB = 0.3  #@param {type:"number"}
 TOURNSIZE = 3  #@param {type:"integer"}
-MUT_SIGMA = 0.1  #@param {type:"number"}
-MUT_INDPB = 0.2  #@param {type:"number"}
+FLIPBIT_INDPB = 0.05  #@param {type:"number"}
 ELITE_SIZE = 5  #@param {type:"integer"}
 
 # General
@@ -46,32 +45,25 @@ creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", list, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
-toolbox.register("attr_float", random.uniform, 0, 1)
-toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, n=N)
+toolbox.register("attr_bit", random.randint, 0, 1)
+toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_bit, n=N)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("select", tools.selTournament, tournsize=TOURNSIZE)
-toolbox.register("mate", tools.cxBlend, alpha=0.5)
-toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=MUT_SIGMA, indpb=MUT_INDPB)
+toolbox.register("mate", tools.cxUniform, indpb=0.5)
+toolbox.register("mutate", tools.mutFlipBit, indpb=FLIPBIT_INDPB)
 
 # =============================================================================
 # Evolution
 # =============================================================================
-def binarize(ind):
-    return [int(v >= 0.5) for v in ind]
-
-def clamp(ind):
-    for i in range(len(ind)):
-        ind[i] = max(0.0, min(1.0, ind[i]))
-
 pop = toolbox.population(n=POP_SIZE)
 
 for ind in pop:
-    ind.fitness.values = (-problem.fitness(binarize(ind)),)
+    ind.fitness.values = (-problem.fitness(ind),)
 
 history = {'fitness': {'mean': [], 'min': [], 'max': [], 'var': []}}
 
 def record_stats(pop):
-    fits = np.array([problem.fitness(binarize(ind)) for ind in pop])
+    fits = np.array([problem.fitness(ind) for ind in pop])
     history['fitness']['mean'].append(float(fits.mean()))
     history['fitness']['min'].append(float(fits.min()))
     history['fitness']['max'].append(float(fits.max()))
@@ -98,11 +90,8 @@ for gen in range(N_GEN):
             del mutant.fitness.values
 
     for ind in offspring:
-        clamp(ind)
-
-    for ind in offspring:
         if not ind.fitness.valid:
-            ind.fitness.values = (-problem.fitness(binarize(ind)),)
+            ind.fitness.values = (-problem.fitness(ind),)
 
     pop[:] = elite + offspring
     record_stats(pop)
@@ -115,9 +104,8 @@ for gen in range(N_GEN):
 # Results
 # =============================================================================
 best_ind = max(pop, key=lambda x: x.fitness.values[0])
-best_binary = binarize(best_ind)
-print(f"\nBest solution: {best_binary}")
-print(f"Best fitness (NK, higher=better): {-problem.fitness(best_binary):.4f}")
+print(f"\nBest solution: {best_ind}")
+print(f"Best fitness (NK, higher=better): {-problem.fitness(best_ind):.4f}")
 
 # =============================================================================
 # Plot
