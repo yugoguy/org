@@ -7,7 +7,7 @@ class SphereProblem(ProblemSetting):
     constraint: sum(45 - x_i) <= 0  (i.e., sum(x_i) >= 45*D)
     """
     
-    def __init__(self, dim, constraint_handling='rejection', penalty_coef=1e6):
+    def __init__(self, dim, constraint_handling='rejection', penalty_coef=1.0):
         super().__init__(constraint_handling, penalty_coef)
         self.dim = dim
     
@@ -87,7 +87,7 @@ class C2NKLandscape(NKLandscape):
         penalty_coef: penalty coefficient for constraint violation
     """
     
-    def __init__(self, n, k, adjacent=True, seed=None, ratio_min=0.1, ratio_max=0.3, penalty_coef=1e3):
+    def __init__(self, n, k, adjacent=True, seed=None, ratio_min=0.1, ratio_max=0.3, penalty_coef=1.0):
         super().__init__(n, k, adjacent, seed)
         self.constraint_handling = 'penalty'
         self.penalty_coef = penalty_coef
