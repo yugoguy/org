@@ -35,9 +35,9 @@ BETA_VAE = 1.0  #@param {type:"number"}
 
 # Evolvability Loss
 EVOL_SIGMA = 0.5  #@param {type:"number"}
-EVOL_THETA = 1e-4  #@param {type:"number"}
-EVOL_PHI = 5e-2  #@param {type:"number"}
-EVOL_ETA = 1e-2  #@param {type:"number"}
+EVOL_FitTHETA = 1e-4  #@param {type:"number"}
+EVOL_NovPHI = 0  #@param {type:"number"}
+EVOL_LocETA = 1e-4  #@param {type:"number"}
 EVOL_K = 50  #@param {type:"integer"}
 EVOL_N_OFFSPRING = 30  #@param {type:"integer"}
 
