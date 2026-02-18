@@ -1,4 +1,4 @@
-# Test: Sphere Penalty LVE with Evolvability Loss
+#@ test
 
 import numpy as np
 import random
@@ -223,37 +223,21 @@ dataset = data_gen.generate()
 print(f"Dataset size: {len(dataset)}")
 
 print("\nStep 2: Build Archive Behaviors")
-# For sphere, behavior = x itself (in normalized space, handled by scaler in LVE)
-# We build archive from raw dataset; LVE.train_module will normalize internally.
-# We pass raw dataset as archive; normalize here to match what decoder outputs.
-# Note: scaler is fitted inside lve.train_module, so we build archive after training.
-
-print("\nStep 3: Train BetaVAE")
 latent_module = BetaVAE(DIM, LATENT_DIM, HIDDEN_DIM, beta=BETA_VAE)
 lve = LVE(data_gen, latent_module, toolbox_lve, device=DEVICE,
           init_from_dataset=INIT_FROM_DATASET, init_epsilon=INIT_EPSILON)
 lve.dataset = dataset
 
-# Build normalized archive AFTER fitting scaler (train_module fits scaler internally)
-# So: first fit scaler by calling train_module without evolvability,
-# then rebuild archive in normalized space, then retrain with evolvability.
-
-# --- Pass 1: fit scaler ---
-print("  Pass 1: fit scaler")
-lve.train_module(epochs=1, batch_size=BATCH_SIZE, lr=LR, val_split=VAL_SPLIT, verbose=False)
-
-# --- Build archive in normalized space ---
+lve.scaler.fit(np.array(dataset, dtype=np.float32))
 archive_np = lve.scaler.transform(np.array(dataset, dtype=np.float32))
 archive_tensor = torch.tensor(archive_np, dtype=torch.float32)
 
-# fitness_fn for evolvability: sphere fitness on normalized decoded output
-# decoder outputs normalized x; inverse_transform then compute fitness
 def sphere_fitness_fn(x_normalized):
-    """x_normalized: (batch, DIM) tensor in [0,1] normalized space. Returns (batch,) tensor."""
+    """x_normalized: (batch, DIM) tensor in normalized space. Returns (batch,) tensor."""
     scale = torch.tensor(lve.scaler.scale_, dtype=torch.float32, device=x_normalized.device)
     min_ = torch.tensor(lve.scaler.data_min_, dtype=torch.float32, device=x_normalized.device)
     x = x_normalized * scale + min_
-    return x.pow(2).sum(dim=1)  # sphere: sum(x^2), minimize
+    return x.pow(2).sum(dim=1)
 
 evol_loss = EvolvabilityLoss(
     archive_behaviors=archive_tensor,
@@ -266,11 +250,7 @@ evol_loss = EvolvabilityLoss(
     n_offspring=EVOL_N_OFFSPRING
 )
 
-# --- Pass 2: full training with evolvability loss ---
-print("  Pass 2: train with evolvability loss")
-# Re-init model weights
-latent_module = BetaVAE(DIM, LATENT_DIM, HIDDEN_DIM, beta=BETA_VAE)
-lve.latent_module = latent_module.to(DEVICE)
+print("\nStep 3: Train BetaVAE")
 loss_history = lve.train_module(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LR,
                                 val_split=VAL_SPLIT, evolvability_loss=evol_loss)
 
