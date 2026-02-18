@@ -404,12 +404,18 @@ class BetaVAE(LatentModule):
         }
         if evolvability_loss is not None:
             history['train_evol'] = []
+            history['train_evol_f'] = []
+            history['train_evol_n'] = []
+            history['train_evol_c'] = []
 
         for epoch in range(epochs):
             self.train()
             epoch_losses = {'total': 0, 'recon': 0, 'kl': 0}
             if evolvability_loss is not None:
                 epoch_losses['evol'] = 0
+                epoch_losses['evol_f'] = 0
+                epoch_losses['evol_n'] = 0
+                epoch_losses['evol_c'] = 0
 
             for batch in train_loader:
                 batch = batch.to(device)
@@ -421,9 +427,12 @@ class BetaVAE(LatentModule):
                 total = loss_dict['total']
 
                 if evolvability_loss is not None:
-                    evol = evolvability_loss(z, batch, self.decode)
-                    total = total + evol
-                    epoch_losses['evol'] += evol.item()
+                    evol_dict = evolvability_loss(z, batch, self.decode)
+                    total = total + evol_dict['total']
+                    epoch_losses['evol'] += evol_dict['total'].item()
+                    epoch_losses['evol_f'] += evol_dict['f'].item()
+                    epoch_losses['evol_n'] += evol_dict['n'].item()
+                    epoch_losses['evol_c'] += evol_dict['c'].item()
 
                 total.backward()
                 optimizer.step()
@@ -435,6 +444,9 @@ class BetaVAE(LatentModule):
                 history[f'train_{k}'].append(epoch_losses[k] / len(train_loader))
             if evolvability_loss is not None:
                 history['train_evol'].append(epoch_losses['evol'] / len(train_loader))
+                history['train_evol_f'].append(epoch_losses['evol_f'] / len(train_loader))
+                history['train_evol_n'].append(epoch_losses['evol_n'] / len(train_loader))
+                history['train_evol_c'].append(epoch_losses['evol_c'] / len(train_loader))
 
             self.eval()
             epoch_losses_val = {'total': 0, 'recon': 0, 'kl': 0}
@@ -456,7 +468,10 @@ class BetaVAE(LatentModule):
                        f"Recon: {history['train_recon'][-1]:.4f}, "
                        f"KL: {history['train_kl'][-1]:.4f}")
                 if evolvability_loss is not None:
-                    msg += f", Evol: {history['train_evol'][-1]:.4f}"
+                    msg += (f", Evol: {history['train_evol'][-1]:.4f}"
+                            f" (F: {history['train_evol_f'][-1]:.4f}"
+                            f", N: {history['train_evol_n'][-1]:.4f}"
+                            f", C: {history['train_evol_c'][-1]:.4f})")
                 msg += f" | Val Total: {history['val_total'][-1]:.4f}"
                 print(msg)
 
