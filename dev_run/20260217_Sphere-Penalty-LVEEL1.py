@@ -237,8 +237,8 @@ def sphere_fitness_fn(x_normalized):
     scale = torch.tensor(lve.scaler.scale_, dtype=torch.float32, device=x_normalized.device)
     min_ = torch.tensor(lve.scaler.data_min_, dtype=torch.float32, device=x_normalized.device)
     x = x_normalized * scale + min_
-    raw_fit = x.pow(2).sum(dim=1)
-    cv = torch.clamp((45.0 - x).sum(dim=1), min=0.0)
+    raw_fit = x.pow(2).mean(dim=1)
+    cv = torch.clamp((45.0 - x).mean(dim=1), min=0.0)
     return raw_fit + PENALTY_COEF * cv
 
 evol_loss = EvolvabilityLoss(
