@@ -323,6 +323,7 @@ class BetaVAE(LatentModule):
     """
     Beta-VAE for continuous data.
     MSE reconstruction + beta * KL divergence.
+    Supports evolvability loss.
 
     Args:
         input_dim: input dimension
