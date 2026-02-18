@@ -60,30 +60,28 @@ class EvolvabilityLoss:
 
         b_parent = x  # (batch, D), no decoder call needed
 
-        total_loss = torch.zeros(1, device=device)
+        f_total = torch.zeros(1, device=device)
+        n_total = torch.zeros(1, device=device)
+        c_total = torch.zeros(1, device=device)
 
         for _ in range(self.n_offspring):
             eps = torch.randn_like(z)
-            z_prime = z + self.sigma * eps  # (batch, latent_dim)
-            b_prime = decode_fn(z_prime)    # (batch, D)
+            z_prime = z + self.sigma * eps
+            b_prime = decode_fn(z_prime)
 
-            # F(z'): negate fitness to maximize
-            f_vals = self.fitness_fn(b_prime)       # (batch,)
-            f_loss = -self.theta * f_vals.mean()
+            f_total = f_total + self.fitness_fn(b_prime).mean()
 
-            # N(z'): novelty = mean distance to k archive members
-            # subsample k archive members
             idx = torch.randperm(M, device=device)[:self.k]
-            b_archive_k = archive[idx]              # (k, D)
-            # ||b_archive_k - b_prime||^2: (batch, k)
-            diff = b_prime.unsqueeze(1) - b_archive_k.unsqueeze(0)  # (batch, k, D)
-            novelty = diff.pow(2).sum(dim=2).mean(dim=1)             # (batch,)
-            n_loss = -self.phi * novelty.mean()
+            b_archive_k = archive[idx]
+            diff = b_prime.unsqueeze(1) - b_archive_k.unsqueeze(0)
+            n_total = n_total + diff.pow(2).sum(dim=2).mean(dim=1).mean()
 
-            # C(z'): locality = ||b_parent - b_prime||^2
-            locality = (b_parent - b_prime).pow(2).sum(dim=1)  # (batch,)
-            c_loss = self.eta * locality.mean()
+            c_total = c_total + (b_parent - b_prime).pow(2).sum(dim=1).mean()
 
-            total_loss = total_loss + f_loss + n_loss + c_loss
+        f_mean = f_total / self.n_offspring
+        n_mean = n_total / self.n_offspring
+        c_mean = c_total / self.n_offspring
 
-        return total_loss / self.n_offspring
+        total_loss = -self.theta * f_mean - self.phi * n_mean + self.eta * c_mean
+
+        return {'total': total_loss, 'f': f_mean, 'n': n_mean, 'c': c_mean}
