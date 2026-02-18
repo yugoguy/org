@@ -245,9 +245,9 @@ evol_loss = EvolvabilityLoss(
     archive_behaviors=archive_tensor,
     fitness_fn=sphere_fitness_fn,
     sigma=EVOL_SIGMA,
-    theta=EVOL_THETA,
-    phi=EVOL_PHI,
-    eta=EVOL_ETA,
+    theta=EVOL_FitTHETA,
+    phi=EVOL_NovPHI,
+    eta=EVOL_LocETA,
     k=EVOL_K,
     n_offspring=EVOL_N_OFFSPRING
 )
