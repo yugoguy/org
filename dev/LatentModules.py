@@ -318,11 +318,11 @@ class BinaryBetaVAE(LatentModule):
         return history
 
 
+
 class BetaVAE(LatentModule):
     """
     Beta-VAE for continuous data.
     MSE reconstruction + beta * KL divergence.
-    Supports evolvability loss.
 
     Args:
         input_dim: input dimension
@@ -381,13 +381,6 @@ class BetaVAE(LatentModule):
 
     def fit(self, dataset, epochs=100, batch_size=32, lr=1e-3, device='cpu',
             verbose=True, val_split=0.2, evolvability_loss=None):
-        """
-        Training loop with optional evolvability loss.
-
-        Args:
-            evolvability_loss: optional EvolvabilityLoss instance.
-                               If provided, added to VAE loss each batch.
-        """
         self.to(device)
 
         data = torch.tensor(np.array(dataset), dtype=torch.float32)
@@ -428,7 +421,7 @@ class BetaVAE(LatentModule):
                 total = loss_dict['total']
 
                 if evolvability_loss is not None:
-                    evol = evolvability_loss(z, self.decode)
+                    evol = evolvability_loss(z, batch, self.decode)
                     total = total + evol
                     epoch_losses['evol'] += evol.item()
 
