@@ -41,12 +41,13 @@ class EvolvabilityLoss:
         self.k = k
         self.n_offspring = n_offspring
 
-    def __call__(self, z, decode_fn):
+    def __call__(self, z, x, decode_fn):
         """
         Compute evolvability loss for a batch of latent vectors.
 
         Args:
             z: Tensor of shape (batch, latent_dim)
+            x: Tensor of shape (batch, input_dim), normalized input (parent behavior)
             decode_fn: callable(z: Tensor) -> Tensor of shape (batch, input_dim)
 
         Returns:
@@ -57,7 +58,7 @@ class EvolvabilityLoss:
         archive = self.archive_behaviors.to(device)  # (M, D)
         M = archive.size(0)
 
-        b_parent = decode_fn(z)  # (batch, D)
+        b_parent = x  # (batch, D), no decoder call needed
 
         total_loss = torch.zeros(1, device=device)
 
