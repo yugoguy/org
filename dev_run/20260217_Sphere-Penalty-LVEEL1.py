@@ -13,7 +13,7 @@ from deap import base, creator, tools
 DIM = 10  #@param {type:"integer"}
 X_MIN = -50.0  #@param {type:"number"}
 X_MAX = 50.0  #@param {type:"number"}
-PENALTY_COEF = 1e6  #@param {type:"number"}
+PENALTY_COEF = 1e2  #@param {type:"number"}
 
 # Data Generation
 NUM_DATA_POINTS = 1000  #@param {type:"integer"}
@@ -34,12 +34,12 @@ VAL_SPLIT = 0.2  #@param {type:"number"}
 BETA_VAE = 1.0  #@param {type:"number"}
 
 # Evolvability Loss
-EVOL_SIGMA = 0.3  #@param {type:"number"}
-EVOL_THETA = 1.0  #@param {type:"number"}
-EVOL_PHI = 0.1  #@param {type:"number"}
-EVOL_ETA = 0.1  #@param {type:"number"}
-EVOL_K = 20  #@param {type:"integer"}
-EVOL_N_OFFSPRING = 5  #@param {type:"integer"}
+EVOL_SIGMA = 0.5  #@param {type:"number"}
+EVOL_THETA = 1e-4  #@param {type:"number"}
+EVOL_PHI = 5e-2  #@param {type:"number"}
+EVOL_ETA = 1e-2  #@param {type:"number"}
+EVOL_K = 50  #@param {type:"integer"}
+EVOL_N_OFFSPRING = 30  #@param {type:"integer"}
 
 # LVE GA
 POP_SIZE_LVE = 100  #@param {type:"integer"}
@@ -237,7 +237,9 @@ def sphere_fitness_fn(x_normalized):
     scale = torch.tensor(lve.scaler.scale_, dtype=torch.float32, device=x_normalized.device)
     min_ = torch.tensor(lve.scaler.data_min_, dtype=torch.float32, device=x_normalized.device)
     x = x_normalized * scale + min_
-    return x.pow(2).sum(dim=1)
+    raw_fit = x.pow(2).sum(dim=1)
+    cv = torch.clamp((45.0 - x).sum(dim=1), min=0.0)
+    return raw_fit + PENALTY_COEF * cv
 
 evol_loss = EvolvabilityLoss(
     archive_behaviors=archive_tensor,
