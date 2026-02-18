@@ -74,9 +74,9 @@ class EvolvabilityLoss:
             idx = torch.randperm(M, device=device)[:self.k]
             b_archive_k = archive[idx]
             diff = b_prime.unsqueeze(1) - b_archive_k.unsqueeze(0)
-            n_total = n_total + diff.pow(2).sum(dim=2).mean(dim=1).mean()
+            n_total = n_total + diff.pow(2).mean(dim=2).mean(dim=1).mean()
 
-            c_total = c_total + (b_parent - b_prime).pow(2).sum(dim=1).mean()
+            c_total = c_total + (b_parent - b_prime).pow(2).mean(dim=1).mean()
 
         f_mean = f_total / self.n_offspring
         n_mean = n_total / self.n_offspring
