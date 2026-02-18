@@ -1,4 +1,4 @@
-#@ test
+#@title test
 
 import numpy as np
 import random
