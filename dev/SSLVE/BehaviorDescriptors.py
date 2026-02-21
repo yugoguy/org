@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import numpy as np
 
 
 class BehaviorDescriptor(ABC):
@@ -20,8 +21,6 @@ class BehaviorDescriptor(ABC):
         """
         pass
 
-
-import numpy as np
 
 
 class BipedalWalkerBD_v1:
