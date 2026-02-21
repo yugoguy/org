@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import numpy as np
 
 
 class BehaviorMatching(ABC):
@@ -37,8 +38,6 @@ class BehaviorMatching(ABC):
         """
         pass
 
-
-import numpy as np
 
 
 class MAPElitesBM:
