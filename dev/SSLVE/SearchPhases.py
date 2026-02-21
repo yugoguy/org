@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-
+import numpy as np
+import torch
 
 class SearchPhase(ABC):
     """
@@ -45,11 +46,6 @@ class SearchPhase(ABC):
             list of numpy arrays (candidate thetas)
         """
         pass
-
-
-
-import numpy as np
-import torch
 
 
 class UniBinUniMemLVE:
