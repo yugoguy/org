@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class BetaVAE_SSLVE(LatentModule):
+class BetaVAE_SSLVE(nn.Module):
     """
     Beta-VAE with non-contrastive SSL loss for SSLVE.
 
