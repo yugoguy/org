@@ -131,6 +131,8 @@ class BetaVAE_SSLVE(nn.Module):
 
         data = torch.tensor(np.array(dataset), dtype=torch.float32)
         n = len(data)
+        if n == 0:
+            return {}
         batch_size = min(batch_size, n)
 
         n_val = int(n * val_split)
@@ -217,8 +219,9 @@ class BetaVAE_SSLVE(nn.Module):
                         val_losses[k] += loss_dict[k].item()
 
             n_val_batches = len(val_loader)
-            for k in val_losses:
-                history[f'val_{k}'].append(val_losses[k] / n_val_batches)
+            if n_val_batches > 0:
+                for k in val_losses:
+                    history[f'val_{k}'].append(val_losses[k] / n_val_batches)
 
             if verbose and (epoch + 1) % 10 == 0:
                 msg = (f"Epoch {epoch+1}/{epochs} | "
@@ -227,7 +230,8 @@ class BetaVAE_SSLVE(nn.Module):
                        f"KL: {history['train_kl'][-1]:.4f}")
                 if use_ssl:
                     msg += f", SSL: {history['train_ssl'][-1]:.4f}"
-                msg += f" | Val Total: {history['val_total'][-1]:.4f}"
+                if n_val_batches > 0:
+                    msg += f" | Val Total: {history['val_total'][-1]:.4f}"
                 print(msg)
 
         self.eval()
