@@ -480,6 +480,7 @@ class BetaVAE(LatentModule):
         return history
 
 
+
 class BetaVAE_SSLVE(LatentModule):
     """
     Beta-VAE with non-contrastive SSL loss for SSLVE.
@@ -544,6 +545,11 @@ class BetaVAE_SSLVE(LatentModule):
         with torch.no_grad():
             return self.encode(x)
 
+    def nograd_encode_dist(self, x):
+        """Stop-gradient encode returning (mu, logvar) for SSL target."""
+        with torch.no_grad():
+            return self.encode_dist(x)
+
     def loss(self, x, x_recon, mu=None, logvar=None, z=None, return_parts=False, **kwargs):
         recon_loss = F.mse_loss(x_recon, x, reduction='mean')
         kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
@@ -552,38 +558,47 @@ class BetaVAE_SSLVE(LatentModule):
             return {'total': total, 'recon': recon_loss, 'kl': kl_loss}
         return total
 
-    def ssl_loss(self, z_batch, neighbor_tensor, counts):
+    def ssl_loss(self, mu_batch, logvar_batch, mu_neighbors, logvar_neighbors, counts):
         """
-        Compute SSL loss given encoded batch and stacked encoded neighbors.
+        KL-based SSL loss: KL(q(z|θ') || q(z|θ)) where θ' is stop-grad neighbor.
+        Gradients flow through θ (batch), encouraging it to cover frozen neighbors.
 
         Args:
-            z_batch: (B, latent_dim) encoded batch (with grad)
-            neighbor_tensor: (total_neighbors, latent_dim) stop-grad encoded neighbors
-            counts: list of int, number of neighbors per sample (sum = total_neighbors)
+            mu_batch: (B, latent_dim) with grad
+            logvar_batch: (B, latent_dim) with grad
+            mu_neighbors: (total_neighbors, latent_dim) stop-grad
+            logvar_neighbors: (total_neighbors, latent_dim) stop-grad
+            counts: list of int, number of neighbors per sample
 
         Returns:
             scalar SSL loss
         """
-        if neighbor_tensor.size(0) == 0:
-            return torch.tensor(0.0, device=z_batch.device)
+        total_neighbors = mu_neighbors.size(0)
+        if total_neighbors == 0:
+            return torch.tensor(0.0, device=mu_batch.device)
 
-        counts_tensor = torch.tensor(counts, dtype=torch.long, device=z_batch.device)
-        # Expand z_batch to align with stacked neighbors
-        z_expanded = torch.repeat_interleave(z_batch, counts_tensor, dim=0)  # (total_neighbors, latent_dim)
+        counts_tensor = torch.tensor(counts, dtype=torch.long, device=mu_batch.device)
+        # Expand batch to align with stacked neighbors
+        mu_b = torch.repeat_interleave(mu_batch, counts_tensor, dim=0)
+        logvar_b = torch.repeat_interleave(logvar_batch, counts_tensor, dim=0)
 
-        sq_dist = (z_expanded - neighbor_tensor).pow(2).sum(dim=1)  # (total_neighbors,)
+        # KL(N(mu', sigma'^2) || N(mu, sigma^2)) per dimension
+        # = log(sigma/sigma') + (sigma'^2 + (mu'-mu)^2) / (2*sigma^2) - 0.5
+        var_b = logvar_b.exp()
+        var_n = logvar_neighbors.exp()
+        kl = 0.5 * (logvar_b - logvar_neighbors + var_n / var_b
+                     + (mu_neighbors - mu_b).pow(2) / var_b - 1.0)
+        kl_per_neighbor = kl.sum(dim=1)  # (total_neighbors,)
 
-        # Segment sum by counts, normalize per sample by count * latent_dim
-        loss = torch.tensor(0.0, device=z_batch.device)
+        # Average per sample: sum over neighbors / count, then mean over batch
+        loss = torch.tensor(0.0, device=mu_batch.device)
         offset = 0
-        for i, c in enumerate(counts):
-            if c == 0:
-                continue
-            seg = sq_dist[offset:offset + c]
-            loss = loss + seg.sum() / (c * self.latent_dim)
+        for c in counts:
+            if c > 0:
+                loss = loss + kl_per_neighbor[offset:offset + c].mean()
             offset += c
 
-        return loss / z_batch.size(0)
+        return loss / mu_batch.size(0)
 
     def fit(self, dataset, bin_ids, bins, epochs=100, batch_size=32,
             lr=1e-3, device='cpu', verbose=True, val_split=0.2):
@@ -646,11 +661,12 @@ class BetaVAE_SSLVE(LatentModule):
 
                 if neighbor_list:
                     stacked = torch.cat(neighbor_list, dim=0).to(device)
-                    z_neighbors = self.nograd_encode(stacked)
+                    mu_neighbors, logvar_neighbors = self.nograd_encode_dist(stacked)
                 else:
-                    z_neighbors = torch.empty(0, self.latent_dim, device=device)
+                    mu_neighbors = torch.empty(0, self.latent_dim, device=device)
+                    logvar_neighbors = torch.empty(0, self.latent_dim, device=device)
 
-                ssl = self.ssl_loss(z, z_neighbors, counts)
+                ssl = self.ssl_loss(mu, logvar, mu_neighbors, logvar_neighbors, counts)
                 total = loss_dict['total'] + self.gamma_ssl * ssl
 
                 total.backward()
