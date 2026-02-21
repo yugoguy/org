@@ -4,14 +4,16 @@ import numpy as np
 class MLP_Agent:
     """
     MLP agent that takes external flat weight vector.
-    ReLU hidden activations, argmax output.
+    ReLU hidden activations, configurable output activation.
 
     Args:
         architecture: list of layer dims, e.g. [4, 32, 2]
+        output_activation: 'argmax' (discrete) or 'tanh' (continuous)
     """
 
-    def __init__(self, architecture):
+    def __init__(self, architecture, output_activation='argmax'):
         self.architecture = architecture
+        self.output_activation = output_activation
         self.weights = []
         self.biases = []
 
@@ -46,17 +48,23 @@ class MLP_Agent:
 
     def act(self, obs):
         """
-        Forward pass. ReLU for hidden layers, argmax for output.
+        Forward pass. ReLU for hidden layers, output_activation for output.
 
         Args:
             obs: 1D numpy array (observation)
 
         Returns:
-            int action
+            int action (argmax) or numpy array (tanh)
         """
         x = np.array(obs, dtype=np.float64)
         for i in range(len(self.weights) - 1):
             x = x @ self.weights[i] + self.biases[i]
-            x = np.maximum(x, 0)  # ReLU
+            x = np.maximum(x, 0)
         x = x @ self.weights[-1] + self.biases[-1]
-        return int(np.argmax(x))
+
+        if self.output_activation == 'argmax':
+            return int(np.argmax(x))
+        elif self.output_activation == 'tanh':
+            return np.tanh(x)
+        else:
+            return x
