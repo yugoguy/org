@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+import numpy as np
+import gymnasium as gym
 
 
 class Collector(ABC):
@@ -21,10 +23,6 @@ class Collector(ABC):
         """
         pass
 
-
-
-import numpy as np
-import gymnasium as gym
 
 
 class BipedalWalkerCollector:
