@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 
 
-class ProblemSetting(ABC):
+class Collector(ABC):
     """
-    Abstract class for problem/environment definition.
+    Abstract class for environment data collection.
     Collects raw episode data from an agent.
     """
 
