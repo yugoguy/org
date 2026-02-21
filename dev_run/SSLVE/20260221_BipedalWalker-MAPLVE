@@ -114,3 +114,33 @@ print(f"Best reward: {-f_min:.2f}")
 # Plot
 # =============================================================================
 sslve.plot_history()
+
+import matplotlib.pyplot as plt
+import gym
+
+# Find best theta in archive
+best_idx = int(np.argmin(bm.fitnesses))
+best_theta = bm.dataset[best_idx]
+agent = sp.make_agent(best_theta)
+
+# Render
+env = gym.make('BipedalWalker-v3', render_mode='rgb_array')
+obs, _ = env.reset(seed=42)
+frames = [env.render()]
+for _ in range(1600):
+    action = agent.act(obs)
+    obs, _, terminated, truncated, _ = env.step(action)
+    frames.append(env.render())
+    if terminated or truncated:
+        break
+env.close()
+
+# Animate
+from matplotlib import animation
+from IPython.display import HTML
+fig, ax = plt.subplots()
+ax.axis('off')
+im = ax.imshow(frames[0])
+def update(i): im.set_data(frames[i]); return [im]
+ani = animation.FuncAnimation(fig, update, frames=len(frames), interval=30, blit=True)
+HTML(ani.to_jshtml())
