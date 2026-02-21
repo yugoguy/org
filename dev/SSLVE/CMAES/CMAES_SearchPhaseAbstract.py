@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class SearchPhase(ABC):
+class CMAES_SearchPhase(ABC):
     """
     Abstract class for search phase in SSLVE.
 
