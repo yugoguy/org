@@ -2,75 +2,78 @@ class SSLVE:
     """
     Self-Supervised Latent Variable Evolution.
 
-    Iterates between:
-      1. search_and_update: run search phase, update bins with new samples
-      2. train_latent: train BetaVAE_SSLVE with current dataset and bin structure
+    Orchestrates: SearchPhase -> Collector -> BehaviorMatching -> LatentModule
 
     Args:
-        latent_module: BetaVAE_SSLVE instance
-        search_phase: SearchPhase instance
-        behavior_matching: BehaviorMatching instance
+        search_phase (SP): generates candidate thetas, converts to agents
+        collector (CO): collects raw episode info from agents
+        behavior_matching (BM): manages archive with behavior descriptors
+        latent_module (LM): trains representation on archive
         device: 'cpu' or 'cuda'
     """
 
-    def __init__(self, latent_module, search_phase, behavior_matching, device='cpu'):
-        self.latent_module = latent_module
-        self.search_phase = search_phase
-        self.behavior_matching = behavior_matching
+    def __init__(self, search_phase, collector, behavior_matching, latent_module, device='cpu'):
+        self.SP = search_phase
+        self.CO = collector
+        self.BM = behavior_matching
+        self.LM = latent_module
         self.device = device
 
-    def initialize(self):
+    def step(self, train_kwargs=None):
         """
-        Phase t=0: generate initial dataset and build initial bins.
-        """
-        initial_thetas = self.search_phase.sample(behavior_matching=None)
-        self.behavior_matching.update_bins(initial_thetas)
-
-    def search_and_update(self):
-        """
-        Search phase: generate new samples using current bins,
-        then update bins and dataset.
-        """
-        new_thetas = self.search_phase.sample(behavior_matching=self.behavior_matching)
-        self.behavior_matching.update_bins(new_thetas)
-
-    def train_latent(self, **kwargs):
-        """
-        Train latent module on current dataset with current bin structure.
+        One SSLVE iteration:
+        1. SP generates thetas
+        2. SP converts to agents, PS collects info
+        3. BM updates archive
+        4. LM trains on archive
 
         Args:
-            **kwargs: passed to latent_module.fit()
+            train_kwargs: dict passed to LM.fit()
 
         Returns:
-            loss history dict
+            loss history from LM.fit()
         """
-        return self.latent_module.fit(
-            dataset=self.behavior_matching.dataset,
-            bin_ids=self.behavior_matching.bin_ids,
-            bins=self.behavior_matching.bins,
-            device=self.device,
-            **kwargs
-        )
+        if train_kwargs is None:
+            train_kwargs = {}
 
-    def run(self, n_phases, **train_kwargs):
+        # Search
+        thetas = self.SP.sample(latent_module=self.LM, behavior_matching=self.BM)
+
+        # Collect
+        infos = []
+        for theta in thetas:
+            agent = self.SP.make_agent(theta)
+            info = self.CO.collect(agent)
+            infos.append(info)
+
+        # Update archive
+        self.BM.update(thetas, infos)
+
+        # Train latent module
+        history = self.LM.fit(
+            dataset=self.BM.dataset,
+            bin_ids=self.BM.bin_ids,
+            bins=self.BM.bins,
+            device=self.device,
+            **train_kwargs
+        )
+        return history
+
+    def run(self, n_steps, train_kwargs=None):
         """
         Full SSLVE loop.
 
         Args:
-            n_phases: number of search+train iterations after initialization
-            **train_kwargs: passed to train_latent each phase
+            n_steps: number of iterations
+            train_kwargs: dict passed to LM.fit() each step
 
         Returns:
-            list of loss history dicts, one per phase
+            list of loss histories
         """
-        self.initialize()
         histories = []
-        for t in range(n_phases):
-            print(f"\n--- SSLVE Phase {t+1}/{n_phases} ---")
-            print(f"Dataset size: {len(self.behavior_matching.dataset)}, "
-                  f"Bins: {len(self.behavior_matching.bins)}")
-            history = self.train_latent(**train_kwargs)
+        for t in range(n_steps):
+            print(f"\n--- SSLVE Step {t+1}/{n_steps} ---")
+            print(f"Archive size: {len(self.BM.dataset)}, Bins: {len(self.BM.bins)}")
+            history = self.step(train_kwargs)
             histories.append(history)
-            if t < n_phases - 1:
-                self.search_and_update()
         return histories
