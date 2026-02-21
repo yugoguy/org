@@ -67,6 +67,11 @@ class SSLVE:
         self.history['coverage'].append(self.BM.coverage())
         self.history['archive_size'].append(self.BM.archive_size())
 
+        print(f"Archive: {self.BM.archive_size()}, "
+              f"Bins: {len(self.BM.bins)}, "
+              f"Coverage: {self.BM.coverage():.4f}, "
+              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}")
+
         # Train latent module
         lm_history = self.LM.fit(
             dataset=self.BM.dataset,
@@ -91,11 +96,6 @@ class SSLVE:
         histories = []
         for t in range(n_steps):
             print(f"\n--- SSLVE Step {t+1}/{n_steps} ---")
-            f_min, f_mean, f_max = self.BM.fitness_stats() if self.BM.bins else (0, 0, 0)
-            print(f"Archive: {self.BM.archive_size()}, "
-                  f"Bins: {len(self.BM.bins)}, "
-                  f"Coverage: {self.BM.coverage():.4f}, "
-                  f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}")
             history = self.step(train_kwargs)
             histories.append(history)
         return histories
