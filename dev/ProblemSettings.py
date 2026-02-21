@@ -229,7 +229,7 @@ class BipedalWalkerProblem(ProblemSetting):
     def fitness(self, agent):
         """
         Run agent in BipedalWalker, return negative mean total reward (minimize).
-        Stores leg contact histories in self.last_leg_contacts.
+        Stores leg contact histories and final hull x positions.
 
         Args:
             agent: agent with act(obs) method, weights already set
@@ -239,6 +239,7 @@ class BipedalWalkerProblem(ProblemSetting):
         """
         total_reward = 0
         self.last_leg_contacts = []
+        self.last_final_x = []
 
         for ep in range(self.n_episodes):
             env = gym.make('BipedalWalker-v3')
@@ -254,8 +255,10 @@ class BipedalWalkerProblem(ProblemSetting):
                 if terminated or truncated:
                     break
 
+            final_x = env.unwrapped.hull.position.x
             total_reward += ep_reward
             self.last_leg_contacts.append(ep_contacts)
+            self.last_final_x.append(final_x)
             env.close()
 
         return -total_reward / self.n_episodes
@@ -268,15 +271,19 @@ class BipedalWalkerProblem(ProblemSetting):
 
     def get_behavior(self, agent):
         """
-        Return behavior descriptor: (leg1_contact_ratio, leg2_contact_ratio).
-        Uses last_leg_contacts if available, otherwise runs fitness first.
+        Return behavior descriptor: (final_x, leg1_contact_ratio, leg2_contact_ratio).
+        Uses cached data if available, otherwise runs fitness first.
 
         Returns:
-            (leg1_contact_ratio, leg2_contact_ratio)
+            (mean_final_x, leg1_contact_ratio, leg2_contact_ratio)
         """
         if not hasattr(self, 'last_leg_contacts') or not self.last_leg_contacts:
             self.fitness(agent)
 
+        # Final x: average across episodes
+        mean_final_x = np.mean(self.last_final_x)
+
+        # Leg contacts: average across all timesteps of all episodes
         all_contacts = []
         for ep_contacts in self.last_leg_contacts:
             all_contacts.extend(ep_contacts)
@@ -284,7 +291,7 @@ class BipedalWalkerProblem(ProblemSetting):
         contacts = np.array(all_contacts)
         leg1_ratio = contacts[:, 0].mean()
         leg2_ratio = contacts[:, 1].mean()
-        return leg1_ratio, leg2_ratio
+        return mean_final_x, leg1_ratio, leg2_ratio
 
     def render_agent(self, agent):
         """
