@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 import numpy as np
 
 
@@ -6,8 +5,9 @@ class MAPElitesBM:
     """
     MAP-Elites style behavior matching with top-k per bin.
 
-    Bins store (theta, fitness) directly. After each update,
-    dataset/fitnesses/bin_ids are rebuilt from bins with clean indices.
+    self.bins always stores {bin_id: [(theta, fitness), ...]}.
+    _rebuild() creates index-based views for LM training:
+        self.dataset, self.fitnesses, self.bin_ids, self.bins_idx
 
     Args:
         behavior_descriptor: object with describe(info) and discretize(descriptor)
@@ -19,14 +19,15 @@ class MAPElitesBM:
         self.behavior_descriptor = behavior_descriptor
         self.fitness_fn = fitness_fn
         self.top_k = top_k
+        self.bins = {}  # {bin_id: [(theta, fitness), ...]}
         self.dataset = []
         self.fitnesses = []
         self.bin_ids = []
-        self.bins = {}  # {bin_id: [(theta, fitness), ...]}
+        self.bins_idx = {}  # {bin_id: [dataset_indices]}
 
     def update(self, thetas, infos):
         """
-        Update archive with new candidates, then rebuild dataset.
+        Update archive with new candidates, then rebuild index views.
 
         Args:
             thetas: list of numpy arrays
@@ -46,24 +47,22 @@ class MAPElitesBM:
                 self.bins[bin_id].sort(key=lambda x: x[1])
                 self.bins[bin_id] = self.bins[bin_id][:self.top_k]
 
-        # Rebuild dataset from bins
         self._rebuild()
 
     def _rebuild(self):
-        """Rebuild dataset, fitnesses, bin_ids from current bins."""
+        """Build index-based views from self.bins."""
         self.dataset = []
         self.fitnesses = []
         self.bin_ids = []
-        new_bins = {}
+        self.bins_idx = {}
         for bin_id, entries in self.bins.items():
-            new_bins[bin_id] = []
+            self.bins_idx[bin_id] = []
             for theta, fitness in entries:
                 idx = len(self.dataset)
                 self.dataset.append(theta)
                 self.fitnesses.append(fitness)
                 self.bin_ids.append(bin_id)
-                new_bins[bin_id].append(idx)
-        self.bins = new_bins
+                self.bins_idx[bin_id].append(idx)
 
     def coverage(self):
         """Fraction of occupied bins over total possible bins."""
