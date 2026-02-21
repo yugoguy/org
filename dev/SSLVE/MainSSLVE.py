@@ -76,7 +76,7 @@ class SSLVE:
         lm_history = self.LM.fit(
             dataset=self.BM.dataset,
             bin_ids=self.BM.bin_ids,
-            bins=self.BM.bins,
+            bins=self.BM.bins_idx,
             device=self.device,
             **train_kwargs
         )
