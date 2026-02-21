@@ -114,11 +114,11 @@ class UniBinUniMemLVE:
             return [self._he_init() for _ in range(self.n_samples)]
 
         # Uniform over bins, uniform within bin
-        bin_ids = list(behavior_matching.bins.keys())
+        bin_ids = list(behavior_matching.bins_idx.keys())
         selected_indices = []
         for _ in range(self.n_samples):
             bid = bin_ids[np.random.randint(len(bin_ids))]
-            members = behavior_matching.bins[bid]
+            members = behavior_matching.bins_idx[bid]
             idx = members[np.random.randint(len(members))]
             selected_indices.append(idx)
 
