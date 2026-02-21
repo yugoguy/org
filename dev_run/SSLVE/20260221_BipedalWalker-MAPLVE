@@ -115,32 +115,40 @@ print(f"Best reward: {-f_min:.2f}")
 # =============================================================================
 sslve.plot_history()
 
+import gymnasium as gym
+import numpy as np
 import matplotlib.pyplot as plt
-import gym
+from matplotlib import animation
+from IPython.display import HTML
 
-# Find best theta in archive
+# Find best theta
 best_idx = int(np.argmin(bm.fitnesses))
 best_theta = bm.dataset[best_idx]
 agent = sp.make_agent(best_theta)
+print(f"Best fitness: {bm.fitnesses[best_idx]:.2f}, Reward: {-bm.fitnesses[best_idx]:.2f}")
 
 # Render
 env = gym.make('BipedalWalker-v3', render_mode='rgb_array')
-obs, _ = env.reset(seed=42)
+obs = env.reset(seed=42)
+if isinstance(obs, tuple):
+    obs = obs[0]
 frames = [env.render()]
 for _ in range(1600):
     action = agent.act(obs)
-    obs, _, terminated, truncated, _ = env.step(action)
+    step_result = env.step(action)
+    obs, reward, terminated, truncated = step_result[0], step_result[1], step_result[2], step_result[3]
     frames.append(env.render())
     if terminated or truncated:
         break
 env.close()
 
 # Animate
-from matplotlib import animation
-from IPython.display import HTML
 fig, ax = plt.subplots()
 ax.axis('off')
 im = ax.imshow(frames[0])
-def update(i): im.set_data(frames[i]); return [im]
+def update(i):
+    im.set_data(frames[i])
+    return [im]
 ani = animation.FuncAnimation(fig, update, frames=len(frames), interval=30, blit=True)
+plt.close()
 HTML(ani.to_jshtml())
