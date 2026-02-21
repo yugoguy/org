@@ -18,19 +18,19 @@ BIN_RANGES = [(0.0, 1.0), (0.0, 1.0), (-1.5, 1.5)]  #@param
 BIN_SIZES = [12, 12, 12]  #@param
 
 # MAP-Elites
-TOP_K = 10  #@param {type:"integer"}
+TOP_K = 3  #@param {type:"integer"}
 
 # Search
-N_SAMPLES = 100 #@param {type:"integer"}
+N_SAMPLES = 200 #@param {type:"integer"}
 MUTATION_SIGMA = 0.3  #@param {type:"number"}
 
 # Latent Module
-LATENT_DIM = 32  #@param {type:"integer"}
-HIDDEN_DIMS = [512, 128]  #@param
-BETA = 1.0  #@param {type:"number"}
+LATENT_DIM = 128  #@param {type:"integer"}
+HIDDEN_DIMS = [512, 256]  #@param
+BETA = 1e-2  #@param {type:"number"}
 GAMMA_SSL = 0.0  #@param {type:"number"}
 EPOCHS = 100  #@param {type:"integer"}
-BATCH_SIZE = 64  #@param {type:"integer"}
+BATCH_SIZE = 512  #@param {type:"integer"}
 LR = 1e-3  #@param {type:"number"}
 
 # SSLVE
