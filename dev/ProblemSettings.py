@@ -206,3 +206,103 @@ class CartPoleProblem(ProblemSetting):
 
         env.close()
         return frames
+
+
+
+class BipedalWalkerProblem(ProblemSetting):
+    """
+    BipedalWalker-v3 problem. Fitness = negative total reward (minimize).
+    No constraint. Tracks leg contact flags for behavior descriptor.
+
+    Args:
+        max_steps: max steps per episode (default 1600)
+        n_episodes: number of episodes to average over
+        seed: random seed for env
+    """
+
+    def __init__(self, max_steps=1600, n_episodes=3, seed=None):
+        super().__init__(constraint_handling='rejection', penalty_coef=0.0)
+        self.max_steps = max_steps
+        self.n_episodes = n_episodes
+        self.seed = seed
+
+    def fitness(self, agent):
+        """
+        Run agent in BipedalWalker, return negative mean total reward (minimize).
+        Stores leg contact histories in self.last_leg_contacts.
+
+        Args:
+            agent: agent with act(obs) method, weights already set
+
+        Returns:
+            negative mean total reward
+        """
+        total_reward = 0
+        self.last_leg_contacts = []
+
+        for ep in range(self.n_episodes):
+            env = gym.make('BipedalWalker-v3')
+            obs, _ = env.reset(seed=self.seed + ep if self.seed is not None else None)
+            ep_reward = 0
+            ep_contacts = []
+
+            for _ in range(self.max_steps):
+                action = agent.act(obs)
+                obs, reward, terminated, truncated, _ = env.step(action)
+                ep_reward += reward
+                ep_contacts.append((obs[8], obs[13]))
+                if terminated or truncated:
+                    break
+
+            total_reward += ep_reward
+            self.last_leg_contacts.append(ep_contacts)
+            env.close()
+
+        return -total_reward / self.n_episodes
+
+    def constraint(self, agent):
+        return -1.0
+
+    def has_constraint(self):
+        return False
+
+    def get_behavior(self, agent):
+        """
+        Return behavior descriptor: (leg1_contact_ratio, leg2_contact_ratio).
+        Uses last_leg_contacts if available, otherwise runs fitness first.
+
+        Returns:
+            (leg1_contact_ratio, leg2_contact_ratio)
+        """
+        if not hasattr(self, 'last_leg_contacts') or not self.last_leg_contacts:
+            self.fitness(agent)
+
+        all_contacts = []
+        for ep_contacts in self.last_leg_contacts:
+            all_contacts.extend(ep_contacts)
+
+        contacts = np.array(all_contacts)
+        leg1_ratio = contacts[:, 0].mean()
+        leg2_ratio = contacts[:, 1].mean()
+        return leg1_ratio, leg2_ratio
+
+    def render_agent(self, agent):
+        """
+        Render one episode of the agent.
+
+        Returns:
+            list of RGB frames
+        """
+        env = gym.make('BipedalWalker-v3', render_mode='rgb_array')
+        obs, _ = env.reset(seed=self.seed if self.seed is not None else None)
+        frames = [env.render()]
+
+        for _ in range(self.max_steps):
+            action = agent.act(obs)
+            obs, _, terminated, truncated, _ = env.step(action)
+            frames.append(env.render())
+            if terminated or truncated:
+                break
+
+        env.close()
+        return frames
