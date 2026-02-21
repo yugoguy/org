@@ -4,23 +4,18 @@ from abc import ABC, abstractmethod
 class BehaviorDescriptor(ABC):
     """
     Abstract class for behavior descriptor.
-
-    Args:
-        problem: ProblemSetting instance
+    Extracts behavior from raw info dict produced by ProblemSetting.collect().
     """
 
-    def __init__(self, problem):
-        self.problem = problem
-
     @abstractmethod
-    def describe(self, theta):
+    def describe(self, info):
         """
-        Compute behavior descriptor for a single gene theta.
+        Compute behavior descriptor from collected info.
 
         Args:
-            theta: numpy array, a single solution
+            info: dict of lists from ProblemSetting.collect()
 
         Returns:
-            behavior descriptor (e.g. scalar, tuple, or array)
+            behavior descriptor (e.g. tuple or array)
         """
         pass
