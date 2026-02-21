@@ -140,11 +140,10 @@ class CartPole_CMAES(SearchPhase):
             toolbox.update(population)
             self._record_generation(fitnesses, behaviors)
 
-            if (gen + 1) % 10 == 0:
-                print(f"CMA-ES Gen {gen+1}/{self.n_gen}, "
-                      f"Fitness min: {self.history['fitness']['min'][-1]:.1f}, "
-                      f"mean: {self.history['fitness']['mean'][-1]:.1f}, "
-                      f"coverage: {self.history['behavior_coverage'][-1]:.4f}")
+            print(f"CMA-ES Gen {gen+1}/{self.n_gen}, "
+                  f"Fitness min: {self.history['fitness']['min'][-1]:.1f}, "
+                  f"mean: {self.history['fitness']['mean'][-1]:.1f}, "
+                  f"coverage: {self.history['behavior_coverage'][-1]:.4f}")
 
         # Return final generation as list of numpy arrays
         return [np.array(ind, dtype=np.float32) for ind in population]
@@ -333,11 +332,10 @@ class BipedalWalker_CMAES(SearchPhase):
             toolbox.update(population)
             self._record_generation(fitnesses, behaviors)
 
-            if (gen + 1) % 10 == 0:
-                print(f"CMA-ES Gen {gen+1}/{self.n_gen}, "
-                      f"Fitness min: {self.history['fitness']['min'][-1]:.1f}, "
-                      f"mean: {self.history['fitness']['mean'][-1]:.1f}, "
-                      f"coverage: {self.history['behavior_coverage'][-1]:.4f}")
+            print(f"CMA-ES Gen {gen+1}/{self.n_gen}, "
+                  f"Fitness min: {self.history['fitness']['min'][-1]:.1f}, "
+                  f"mean: {self.history['fitness']['mean'][-1]:.1f}, "
+                  f"coverage: {self.history['behavior_coverage'][-1]:.4f}")
 
         return [np.array(ind, dtype=np.float32) for ind in population]
 
