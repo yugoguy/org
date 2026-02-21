@@ -5,7 +5,7 @@ from IPython import display as ipythondisplay
 from matplotlib import animation
 
 
-class CartPole_CMAES(SearchPhase):
+class CartPole_CMAES(CMAES_SearchPhase):
     """
     CMA-ES search phase for CartPole with MLP agents.
 
@@ -207,7 +207,7 @@ class CartPole_CMAES(SearchPhase):
             return anim
 
 
-class BipedalWalker_CMAES(SearchPhase):
+class BipedalWalker_CMAES(CMAES_SearchPhase):
     """
     CMA-ES search phase for BipedalWalker with MLP agents.
     Behavior descriptor: (final_x, leg1_contact_ratio, leg2_contact_ratio).
