@@ -137,3 +137,71 @@ class UniBinUniMemLVE:
             decoded = latent_module.decode(z)
 
         return [d.cpu().numpy() for d in decoded]
+
+
+
+class UniBinUniMemPSE:
+    """
+    Search phase: uniform over bins, uniform within bin.
+    Mutates directly in parameter space (no latent module).
+    Falls back to He-initialized random thetas if archive empty.
+
+    Args:
+        agent_class: class with architecture info
+        architecture: list of layer dims
+        agent_kwargs: dict for agent constructor
+        mutation_sigma: noise std added in weight space
+        n_samples: number of candidates per call
+    """
+
+    def __init__(self, agent_class, architecture, agent_kwargs=None,
+                 mutation_sigma=0.1, n_samples=50):
+        self.agent_class = agent_class
+        self.architecture = architecture
+        self.agent_kwargs = agent_kwargs or {}
+        self.mutation_sigma = mutation_sigma
+        self.n_samples = n_samples
+
+    def make_agent(self, theta):
+        agent = self.agent_class(self.architecture, **self.agent_kwargs)
+        agent.set_weights(theta)
+        return agent
+
+    def _he_init(self):
+        parts = []
+        for i in range(len(self.architecture) - 1):
+            fan_in = self.architecture[i]
+            fan_out = self.architecture[i + 1]
+            std = np.sqrt(2.0 / fan_in)
+            W = np.random.randn(fan_in * fan_out) * std
+            b = np.zeros(fan_out)
+            parts.append(W)
+            parts.append(b)
+        return np.concatenate(parts)
+
+    def sample(self, behavior_matching=None):
+        """
+        Generate candidate thetas.
+
+        If archive empty: He-initialized random thetas.
+        Otherwise: uniform bin -> uniform member -> Gaussian noise in weight space.
+
+        Args:
+            behavior_matching: MAPElitesBM instance or None
+
+        Returns:
+            list of numpy arrays
+        """
+        if behavior_matching is None or len(behavior_matching.bins) == 0:
+            return [self._he_init() for _ in range(self.n_samples)]
+
+        bin_ids = list(behavior_matching.bins_idx.keys())
+        candidates = []
+        for _ in range(self.n_samples):
+            bid = bin_ids[np.random.randint(len(bin_ids))]
+            members = behavior_matching.bins_idx[bid]
+            idx = members[np.random.randint(len(members))]
+            parent = behavior_matching.dataset[idx]
+            child = parent + self.mutation_sigma * np.random.randn(len(parent))
+            candidates.append(child)
+        return candidates
