@@ -131,7 +131,11 @@ class BetaVAE_SSLVE(nn.Module):
 
         data = torch.tensor(np.array(dataset), dtype=torch.float32)
         n = len(data)
+        batch_size = min(batch_size, n)
+
         n_val = int(n * val_split)
+        if n - n_val < batch_size:
+            n_val = 0
         n_train = n - n_val
 
         indices = torch.randperm(n).tolist()
