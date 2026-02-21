@@ -210,7 +210,8 @@ class CartPole_CMAES(SearchPhase):
 class BipedalWalker_CMAES(SearchPhase):
     """
     CMA-ES search phase for BipedalWalker with MLP agents.
-    Behavior descriptor: (leg1_contact_ratio, leg2_contact_ratio).
+    Behavior descriptor: (final_x, leg1_contact_ratio, leg2_contact_ratio).
+    MAP-Elites grid: 100 x 10 x 10 = 10,000 cells.
 
     Args:
         problem: BipedalWalkerProblem instance
@@ -222,7 +223,10 @@ class BipedalWalker_CMAES(SearchPhase):
         output_activation: output activation for agent (default 'tanh')
     """
 
-    N_BINS = 30
+    # Behavior discretization
+    X_MIN, X_MAX = 0.0, 100.0
+    N_BINS_X = 100
+    N_BINS_LEG = 10
 
     def __init__(self, problem, architecture, agent_class, sigma=1.0,
                  lambda_=50, n_gen=100, output_activation='tanh'):
@@ -240,10 +244,13 @@ class BipedalWalker_CMAES(SearchPhase):
         self.best_fitness = float('inf')
         self.history = {
             'fitness': {'min': [], 'max': [], 'mean': []},
-            'behavior_std': [],
+            'behavior_std_x': [],
+            'behavior_std_leg1': [],
+            'behavior_std_leg2': [],
+            'behavior_std_sum': [],
             'behavior_coverage': []
         }
-        self.map_count = np.zeros((self.N_BINS, self.N_BINS), dtype=int)
+        self.map_count = np.zeros((self.N_BINS_X, self.N_BINS_LEG, self.N_BINS_LEG), dtype=int)
 
     def _he_centroid(self):
         """He initialization for centroid vector."""
@@ -268,11 +275,13 @@ class BipedalWalker_CMAES(SearchPhase):
         behavior = self.problem.get_behavior(agent)
         return fit, behavior
 
-    def _update_map(self, b1, b2):
-        """Update MAP-count with a single behavior sample."""
-        bi = min(int(np.clip(b1, 0, 1) * self.N_BINS), self.N_BINS - 1)
-        bj = min(int(np.clip(b2, 0, 1) * self.N_BINS), self.N_BINS - 1)
-        self.map_count[bi, bj] = 1
+    def _update_map(self, final_x, leg1, leg2):
+        """Update MAP-count with a single 3D behavior sample."""
+        norm_x = np.clip((final_x - self.X_MIN) / (self.X_MAX - self.X_MIN), 0, 1)
+        bi = min(int(norm_x * self.N_BINS_X), self.N_BINS_X - 1)
+        bj = min(int(np.clip(leg1, 0, 1) * self.N_BINS_LEG), self.N_BINS_LEG - 1)
+        bk = min(int(np.clip(leg2, 0, 1) * self.N_BINS_LEG), self.N_BINS_LEG - 1)
+        self.map_count[bi, bj, bk] = 1
 
     def _record_generation(self, fitnesses, behaviors):
         """Record per-generation stats."""
@@ -281,15 +290,22 @@ class BipedalWalker_CMAES(SearchPhase):
         self.history['fitness']['max'].append(float(fits.max()))
         self.history['fitness']['mean'].append(float(fits.mean()))
 
-        behaviors_arr = np.array(behaviors)
-        std_b1 = behaviors_arr[:, 0].std()
-        std_b2 = behaviors_arr[:, 1].std()
-        self.history['behavior_std'].append(float((std_b1 + std_b2) / 2))
+        behaviors_arr = np.array(behaviors)  # (N, 3): final_x, leg1, leg2
+        # Normalize final_x to [0, 1] for std calculation
+        norm_x = np.clip((behaviors_arr[:, 0] - self.X_MIN) / (self.X_MAX - self.X_MIN), 0, 1)
+        std_x = float(norm_x.std())
+        std_leg1 = float(behaviors_arr[:, 1].std())
+        std_leg2 = float(behaviors_arr[:, 2].std())
+        self.history['behavior_std_x'].append(std_x)
+        self.history['behavior_std_leg1'].append(std_leg1)
+        self.history['behavior_std_leg2'].append(std_leg2)
+        self.history['behavior_std_sum'].append(std_x + std_leg1 + std_leg2)
 
-        for b1, b2 in behaviors:
-            self._update_map(b1, b2)
+        for beh in behaviors:
+            self._update_map(beh[0], beh[1], beh[2])
 
-        coverage = self.map_count.sum() / (self.N_BINS * self.N_BINS)
+        total_cells = self.N_BINS_X * self.N_BINS_LEG * self.N_BINS_LEG
+        coverage = self.map_count.sum() / total_cells
         self.history['behavior_coverage'].append(float(coverage))
 
     def sample(self, behavior_matching=None):
@@ -340,7 +356,7 @@ class BipedalWalker_CMAES(SearchPhase):
         return [np.array(ind, dtype=np.float32) for ind in population]
 
     def plot_history(self):
-        """Plot fitness, behavior std, and behavior coverage over generations."""
+        """Plot fitness, behavior std (4 lines), and behavior coverage over generations."""
         fig, axes = plt.subplots(1, 3, figsize=(18, 5))
         gens = range(len(self.history['fitness']['mean']))
 
@@ -354,10 +370,14 @@ class BipedalWalker_CMAES(SearchPhase):
         ax.legend()
 
         ax = axes[1]
-        ax.plot(gens, self.history['behavior_std'])
+        ax.plot(gens, self.history['behavior_std_x'], label='final_x')
+        ax.plot(gens, self.history['behavior_std_leg1'], label='leg1_contact')
+        ax.plot(gens, self.history['behavior_std_leg2'], label='leg2_contact')
+        ax.plot(gens, self.history['behavior_std_sum'], label='sum', linestyle='--', color='black')
         ax.set_xlabel('Generation')
-        ax.set_ylabel('Behavior Std (avg)')
+        ax.set_ylabel('Behavior Std')
         ax.set_title('Behavior Diversity (Std)')
+        ax.legend()
 
         ax = axes[2]
         ax.plot(gens, self.history['behavior_coverage'])
