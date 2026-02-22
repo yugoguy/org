@@ -21,11 +21,11 @@ BIN_SIZES = [12, 12, 12]  #@param
 TOP_K = 3  #@param {type:"integer"}
 
 # CMA-ME Improvement Emitter
-N_EMITTERS = 10  #@param {type:"integer"}
+N_EMITTERS = 5  #@param {type:"integer"}
 N_GENERATIONS = 10  #@param {type:"integer"}
 SIGMA_INIT = 1.0  #@param {type:"number"}
 LAMBDA_ = 20  #@param {type:"integer"}
-N_OUTPUT = 20  #@param {type:"integer"}
+N_OUTPUT = 40  #@param {type:"integer"}
 N_INIT_SAMPLES = 200  #@param {type:"integer"}
 
 # MAP-Elite
