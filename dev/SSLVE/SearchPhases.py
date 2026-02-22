@@ -231,7 +231,7 @@ class UniBinUniMemCMAMEimpPSE:
 
     def __init__(self, agent_class, architecture, agent_kwargs=None,
                  n_emitters=5, n_generations=10, sigma_init=1.0,
-                 lambda_=20, n_output=20, n_init_samples=200):
+                 lambda_=20, n_output=20, n_init_samples=200, separable=False):
         self.agent_class = agent_class
         self.architecture = architecture
         self.agent_kwargs = agent_kwargs or {}
@@ -242,6 +242,7 @@ class UniBinUniMemCMAMEimpPSE:
         self.mu = lambda_ // 2
         self.n_output = n_output
         self.n_init_samples = n_init_samples
+        self.separable = separable
         self.dim = self._weight_dim()
 
         self._init_cma_weights()
@@ -319,74 +320,141 @@ class UniBinUniMemCMAMEimpPSE:
 
         sigma = self.sigma_init
         n = self.dim
-        C = np.eye(n)
         p_sigma = np.zeros(n)
         p_c = np.zeros(n)
 
-        for gen in range(self.n_generations):
+        if self.separable:
+            # Diagonal covariance: store as vector
+            C_diag = np.ones(n)
+
+            for gen in range(self.n_generations):
+                D = np.sqrt(np.maximum(C_diag, 1e-20))
+
+                candidates = []
+                for _ in range(self.lambda_):
+                    z = np.random.randn(n)
+                    x = mean + sigma * D * z
+                    candidates.append(x)
+
+                eval_results = []
+                for theta in candidates:
+                    agent = self.make_agent(theta)
+                    info = collector.collect(agent)
+                    fitness = bm.fitness_fn(info)
+                    descriptor = bm.behavior_descriptor.describe(info)
+                    bin_id = bm.behavior_descriptor.discretize(descriptor)
+                    score = self._score(bin_id, fitness, bm)
+                    eval_results.append((score, np.random.random(), theta))
+
+                eval_results.sort(key=lambda x: (-x[0], x[1]))
+                selected_thetas = [s[2] for s in eval_results[:self.mu]]
+
+                old_mean = mean.copy()
+                mean = np.zeros(n)
+                for i, theta in enumerate(selected_thetas):
+                    mean += self.weights[i] * theta
+
+                mean_diff = (mean - old_mean) / sigma
+                inv_D = 1.0 / D
+                p_sigma = ((1 - self.c_sigma) * p_sigma
+                           + np.sqrt(self.c_sigma * (2 - self.c_sigma) * self.mu_eff)
+                           * (inv_D * mean_diff))
+
+                h_sigma = (np.linalg.norm(p_sigma)
+                           / np.sqrt(1 - (1 - self.c_sigma) ** (2 * (gen + 1)))
+                           < (1.4 + 2 / (n + 1)) * self.chi_n)
+
+                p_c = ((1 - self.c_c) * p_c
+                       + h_sigma * np.sqrt(self.c_c * (2 - self.c_c) * self.mu_eff)
+                       * mean_diff)
+
+                artmp = np.array([(theta - old_mean) / sigma for theta in selected_thetas])
+                C_diag = ((1 - self.c_1 - self.c_mu_cov
+                           + (1 - h_sigma) * self.c_1 * self.c_c * (2 - self.c_c)) * C_diag
+                          + self.c_1 * p_c ** 2
+                          + self.c_mu_cov * sum(self.weights[i] * artmp[i] ** 2
+                                                for i in range(self.mu)))
+
+                sigma *= np.exp((self.c_sigma / self.d_sigma)
+                                * (np.linalg.norm(p_sigma) / self.chi_n - 1))
+
+            # Final output
+            D = np.sqrt(np.maximum(C_diag, 1e-20))
+            output = []
+            for _ in range(self.n_output):
+                z = np.random.randn(n)
+                x = mean + sigma * D * z
+                output.append(x)
+
+        else:
+            # Full covariance
+            C = np.eye(n)
+
+            for gen in range(self.n_generations):
+                eigvals, eigvecs = np.linalg.eigh(C)
+                eigvals = np.maximum(eigvals, 1e-20)
+                D = np.sqrt(eigvals)
+                B = eigvecs
+
+                candidates = []
+                for _ in range(self.lambda_):
+                    z = np.random.randn(n)
+                    x = mean + sigma * (B @ (D * z))
+                    candidates.append(x)
+
+                eval_results = []
+                for theta in candidates:
+                    agent = self.make_agent(theta)
+                    info = collector.collect(agent)
+                    fitness = bm.fitness_fn(info)
+                    descriptor = bm.behavior_descriptor.describe(info)
+                    bin_id = bm.behavior_descriptor.discretize(descriptor)
+                    score = self._score(bin_id, fitness, bm)
+                    eval_results.append((score, np.random.random(), theta))
+
+                eval_results.sort(key=lambda x: (-x[0], x[1]))
+                selected_thetas = [s[2] for s in eval_results[:self.mu]]
+
+                old_mean = mean.copy()
+                mean = np.zeros(n)
+                for i, theta in enumerate(selected_thetas):
+                    mean += self.weights[i] * theta
+
+                invsqrtC = B @ np.diag(1.0 / D) @ B.T
+                mean_diff = (mean - old_mean) / sigma
+                p_sigma = ((1 - self.c_sigma) * p_sigma
+                           + np.sqrt(self.c_sigma * (2 - self.c_sigma) * self.mu_eff)
+                           * (invsqrtC @ mean_diff))
+
+                h_sigma = (np.linalg.norm(p_sigma)
+                           / np.sqrt(1 - (1 - self.c_sigma) ** (2 * (gen + 1)))
+                           < (1.4 + 2 / (n + 1)) * self.chi_n)
+
+                p_c = ((1 - self.c_c) * p_c
+                       + h_sigma * np.sqrt(self.c_c * (2 - self.c_c) * self.mu_eff)
+                       * mean_diff)
+
+                artmp = np.array([(theta - old_mean) / sigma for theta in selected_thetas])
+                C = ((1 - self.c_1 - self.c_mu_cov
+                      + (1 - h_sigma) * self.c_1 * self.c_c * (2 - self.c_c)) * C
+                     + self.c_1 * np.outer(p_c, p_c)
+                     + self.c_mu_cov * sum(self.weights[i] * np.outer(artmp[i], artmp[i])
+                                           for i in range(self.mu)))
+
+                sigma *= np.exp((self.c_sigma / self.d_sigma)
+                                * (np.linalg.norm(p_sigma) / self.chi_n - 1))
+
+            # Final output
             eigvals, eigvecs = np.linalg.eigh(C)
             eigvals = np.maximum(eigvals, 1e-20)
             D = np.sqrt(eigvals)
             B = eigvecs
 
-            candidates = []
-            for _ in range(self.lambda_):
+            output = []
+            for _ in range(self.n_output):
                 z = np.random.randn(n)
                 x = mean + sigma * (B @ (D * z))
-                candidates.append(x)
-
-            eval_results = []
-            for theta in candidates:
-                agent = self.make_agent(theta)
-                info = collector.collect(agent)
-                fitness = bm.fitness_fn(info)
-                descriptor = bm.behavior_descriptor.describe(info)
-                bin_id = bm.behavior_descriptor.discretize(descriptor)
-                score = self._score(bin_id, fitness, bm)
-                eval_results.append((score, np.random.random(), theta))
-
-            eval_results.sort(key=lambda x: (-x[0], x[1]))
-            selected_thetas = [s[2] for s in eval_results[:self.mu]]
-
-            old_mean = mean.copy()
-            mean = np.zeros(n)
-            for i, theta in enumerate(selected_thetas):
-                mean += self.weights[i] * theta
-
-            invsqrtC = B @ np.diag(1.0 / D) @ B.T
-            mean_diff = (mean - old_mean) / sigma
-            p_sigma = ((1 - self.c_sigma) * p_sigma
-                       + np.sqrt(self.c_sigma * (2 - self.c_sigma) * self.mu_eff)
-                       * (invsqrtC @ mean_diff))
-
-            h_sigma = (np.linalg.norm(p_sigma)
-                       / np.sqrt(1 - (1 - self.c_sigma) ** (2 * (gen + 1)))
-                       < (1.4 + 2 / (n + 1)) * self.chi_n)
-
-            p_c = ((1 - self.c_c) * p_c
-                   + h_sigma * np.sqrt(self.c_c * (2 - self.c_c) * self.mu_eff)
-                   * mean_diff)
-
-            artmp = np.array([(theta - old_mean) / sigma for theta in selected_thetas])
-            C = ((1 - self.c_1 - self.c_mu_cov + (1 - h_sigma) * self.c_1 * self.c_c * (2 - self.c_c)) * C
-                 + self.c_1 * np.outer(p_c, p_c)
-                 + self.c_mu_cov * sum(self.weights[i] * np.outer(artmp[i], artmp[i])
-                                       for i in range(self.mu)))
-
-            sigma *= np.exp((self.c_sigma / self.d_sigma)
-                            * (np.linalg.norm(p_sigma) / self.chi_n - 1))
-
-        # Sample n_output fresh candidates from final adapted distribution
-        eigvals, eigvecs = np.linalg.eigh(C)
-        eigvals = np.maximum(eigvals, 1e-20)
-        D = np.sqrt(eigvals)
-        B = eigvecs
-
-        output = []
-        for _ in range(self.n_output):
-            z = np.random.randn(n)
-            x = mean + sigma * (B @ (D * z))
-            output.append(x)
+                output.append(x)
 
         return output
 
@@ -441,7 +509,8 @@ class UniBinUniMemCMAMEimpLVE:
 
     def __init__(self, agent_class, architecture, agent_kwargs=None,
                  n_emitters=5, n_generations=10, sigma_init=0.5,
-                 lambda_=20, n_output=20, n_init_samples=200, latent_dim=128):
+                 lambda_=20, n_output=20, n_init_samples=200, latent_dim=128,
+                 separable=False):
         self.agent_class = agent_class
         self.architecture = architecture
         self.agent_kwargs = agent_kwargs or {}
@@ -453,6 +522,7 @@ class UniBinUniMemCMAMEimpLVE:
         self.n_output = n_output
         self.n_init_samples = n_init_samples
         self.latent_dim = latent_dim
+        self.separable = separable
 
         self._init_cma_weights()
 
@@ -544,86 +614,145 @@ class UniBinUniMemCMAMEimpLVE:
         idx = members[np.random.randint(len(members))]
         theta_parent = bm.dataset[idx]
 
-        # Encode to latent as CMA-ES mean
         mean = self._encode(theta_parent, latent_module)
 
         sigma = self.sigma_init
         n = self.latent_dim
-        C = np.eye(n)
         p_sigma = np.zeros(n)
         p_c = np.zeros(n)
 
-        for gen in range(self.n_generations):
+        if self.separable:
+            C_diag = np.ones(n)
+
+            for gen in range(self.n_generations):
+                D = np.sqrt(np.maximum(C_diag, 1e-20))
+
+                z_candidates = []
+                for _ in range(self.lambda_):
+                    z_noise = np.random.randn(n)
+                    z = mean + sigma * D * z_noise
+                    z_candidates.append(z)
+
+                thetas = self._decode_batch(z_candidates, latent_module)
+
+                eval_results = []
+                for i, theta in enumerate(thetas):
+                    agent = self.make_agent(theta)
+                    info = collector.collect(agent)
+                    fitness = bm.fitness_fn(info)
+                    descriptor = bm.behavior_descriptor.describe(info)
+                    bin_id = bm.behavior_descriptor.discretize(descriptor)
+                    score = self._score(bin_id, fitness, bm)
+                    eval_results.append((score, np.random.random(), z_candidates[i]))
+
+                eval_results.sort(key=lambda x: (-x[0], x[1]))
+                selected_zs = [s[2] for s in eval_results[:self.mu]]
+
+                old_mean = mean.copy()
+                mean = np.zeros(n)
+                for i, z in enumerate(selected_zs):
+                    mean += self.weights[i] * z
+
+                mean_diff = (mean - old_mean) / sigma
+                inv_D = 1.0 / D
+                p_sigma = ((1 - self.c_sigma) * p_sigma
+                           + np.sqrt(self.c_sigma * (2 - self.c_sigma) * self.mu_eff)
+                           * (inv_D * mean_diff))
+
+                h_sigma = (np.linalg.norm(p_sigma)
+                           / np.sqrt(1 - (1 - self.c_sigma) ** (2 * (gen + 1)))
+                           < (1.4 + 2 / (n + 1)) * self.chi_n)
+
+                p_c = ((1 - self.c_c) * p_c
+                       + h_sigma * np.sqrt(self.c_c * (2 - self.c_c) * self.mu_eff)
+                       * mean_diff)
+
+                artmp = np.array([(z - old_mean) / sigma for z in selected_zs])
+                C_diag = ((1 - self.c_1 - self.c_mu_cov
+                           + (1 - h_sigma) * self.c_1 * self.c_c * (2 - self.c_c)) * C_diag
+                          + self.c_1 * p_c ** 2
+                          + self.c_mu_cov * sum(self.weights[i] * artmp[i] ** 2
+                                                for i in range(self.mu)))
+
+                sigma *= np.exp((self.c_sigma / self.d_sigma)
+                                * (np.linalg.norm(p_sigma) / self.chi_n - 1))
+
+            D = np.sqrt(np.maximum(C_diag, 1e-20))
+            z_output = []
+            for _ in range(self.n_output):
+                z_noise = np.random.randn(n)
+                z = mean + sigma * D * z_noise
+                z_output.append(z)
+
+        else:
+            C = np.eye(n)
+
+            for gen in range(self.n_generations):
+                eigvals, eigvecs = np.linalg.eigh(C)
+                eigvals = np.maximum(eigvals, 1e-20)
+                D = np.sqrt(eigvals)
+                B = eigvecs
+
+                z_candidates = []
+                for _ in range(self.lambda_):
+                    z_noise = np.random.randn(n)
+                    z = mean + sigma * (B @ (D * z_noise))
+                    z_candidates.append(z)
+
+                thetas = self._decode_batch(z_candidates, latent_module)
+
+                eval_results = []
+                for i, theta in enumerate(thetas):
+                    agent = self.make_agent(theta)
+                    info = collector.collect(agent)
+                    fitness = bm.fitness_fn(info)
+                    descriptor = bm.behavior_descriptor.describe(info)
+                    bin_id = bm.behavior_descriptor.discretize(descriptor)
+                    score = self._score(bin_id, fitness, bm)
+                    eval_results.append((score, np.random.random(), z_candidates[i]))
+
+                eval_results.sort(key=lambda x: (-x[0], x[1]))
+                selected_zs = [s[2] for s in eval_results[:self.mu]]
+
+                old_mean = mean.copy()
+                mean = np.zeros(n)
+                for i, z in enumerate(selected_zs):
+                    mean += self.weights[i] * z
+
+                invsqrtC = B @ np.diag(1.0 / D) @ B.T
+                mean_diff = (mean - old_mean) / sigma
+                p_sigma = ((1 - self.c_sigma) * p_sigma
+                           + np.sqrt(self.c_sigma * (2 - self.c_sigma) * self.mu_eff)
+                           * (invsqrtC @ mean_diff))
+
+                h_sigma = (np.linalg.norm(p_sigma)
+                           / np.sqrt(1 - (1 - self.c_sigma) ** (2 * (gen + 1)))
+                           < (1.4 + 2 / (n + 1)) * self.chi_n)
+
+                p_c = ((1 - self.c_c) * p_c
+                       + h_sigma * np.sqrt(self.c_c * (2 - self.c_c) * self.mu_eff)
+                       * mean_diff)
+
+                artmp = np.array([(z - old_mean) / sigma for z in selected_zs])
+                C = ((1 - self.c_1 - self.c_mu_cov
+                      + (1 - h_sigma) * self.c_1 * self.c_c * (2 - self.c_c)) * C
+                     + self.c_1 * np.outer(p_c, p_c)
+                     + self.c_mu_cov * sum(self.weights[i] * np.outer(artmp[i], artmp[i])
+                                           for i in range(self.mu)))
+
+                sigma *= np.exp((self.c_sigma / self.d_sigma)
+                                * (np.linalg.norm(p_sigma) / self.chi_n - 1))
+
             eigvals, eigvecs = np.linalg.eigh(C)
             eigvals = np.maximum(eigvals, 1e-20)
             D = np.sqrt(eigvals)
             B = eigvecs
 
-            # Sample lambda candidates in latent space
-            z_candidates = []
-            for _ in range(self.lambda_):
+            z_output = []
+            for _ in range(self.n_output):
                 z_noise = np.random.randn(n)
                 z = mean + sigma * (B @ (D * z_noise))
-                z_candidates.append(z)
-
-            # Decode to param space
-            thetas = self._decode_batch(z_candidates, latent_module)
-
-            # Evaluate and score
-            eval_results = []
-            for i, theta in enumerate(thetas):
-                agent = self.make_agent(theta)
-                info = collector.collect(agent)
-                fitness = bm.fitness_fn(info)
-                descriptor = bm.behavior_descriptor.describe(info)
-                bin_id = bm.behavior_descriptor.discretize(descriptor)
-                score = self._score(bin_id, fitness, bm)
-                eval_results.append((score, np.random.random(), z_candidates[i]))
-
-            # Rank: higher score better, ties broken randomly
-            eval_results.sort(key=lambda x: (-x[0], x[1]))
-            selected_zs = [s[2] for s in eval_results[:self.mu]]
-
-            # CMA-ES update on latent vectors
-            old_mean = mean.copy()
-            mean = np.zeros(n)
-            for i, z in enumerate(selected_zs):
-                mean += self.weights[i] * z
-
-            invsqrtC = B @ np.diag(1.0 / D) @ B.T
-            mean_diff = (mean - old_mean) / sigma
-            p_sigma = ((1 - self.c_sigma) * p_sigma
-                       + np.sqrt(self.c_sigma * (2 - self.c_sigma) * self.mu_eff)
-                       * (invsqrtC @ mean_diff))
-
-            h_sigma = (np.linalg.norm(p_sigma)
-                       / np.sqrt(1 - (1 - self.c_sigma) ** (2 * (gen + 1)))
-                       < (1.4 + 2 / (n + 1)) * self.chi_n)
-
-            p_c = ((1 - self.c_c) * p_c
-                   + h_sigma * np.sqrt(self.c_c * (2 - self.c_c) * self.mu_eff)
-                   * mean_diff)
-
-            artmp = np.array([(z - old_mean) / sigma for z in selected_zs])
-            C = ((1 - self.c_1 - self.c_mu_cov + (1 - h_sigma) * self.c_1 * self.c_c * (2 - self.c_c)) * C
-                 + self.c_1 * np.outer(p_c, p_c)
-                 + self.c_mu_cov * sum(self.weights[i] * np.outer(artmp[i], artmp[i])
-                                       for i in range(self.mu)))
-
-            sigma *= np.exp((self.c_sigma / self.d_sigma)
-                            * (np.linalg.norm(p_sigma) / self.chi_n - 1))
-
-        # Sample n_output fresh candidates from final adapted latent distribution, decode
-        eigvals, eigvecs = np.linalg.eigh(C)
-        eigvals = np.maximum(eigvals, 1e-20)
-        D = np.sqrt(eigvals)
-        B = eigvecs
-
-        z_output = []
-        for _ in range(self.n_output):
-            z_noise = np.random.randn(n)
-            z = mean + sigma * (B @ (D * z_noise))
-            z_output.append(z)
+                z_output.append(z)
 
         return self._decode_batch(z_output, latent_module)
 
