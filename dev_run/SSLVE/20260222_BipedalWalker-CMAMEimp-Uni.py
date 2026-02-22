@@ -7,7 +7,7 @@ import torch
 # =============================================================================
 # BipedalWalker
 MAX_STEPS = 200  #@param {type:"integer"}
-N_EPISODES = 3  #@param {type:"integer"}
+N_EPISODES = 1  #@param {type:"integer"}
 
 # Agent Architecture
 ARCHITECTURE = [24, 64, 64, 4]  #@param
@@ -23,10 +23,11 @@ TOP_K = 3  #@param {type:"integer"}
 # CMA-ME Improvement Emitter
 N_EMITTERS = 5  #@param {type:"integer"}
 N_GENERATIONS = 10  #@param {type:"integer"}
-SIGMA_INIT = 1.0  #@param {type:"number"}
+SIGMA_INIT = 0.5  #@param {type:"number"}
 LAMBDA_ = 20  #@param {type:"integer"}
-N_OUTPUT = 40  #@param {type:"integer"}
+N_OUTPUT = 20  #@param {type:"integer"}
 N_INIT_SAMPLES = 200  #@param {type:"integer"}
+SEPARABLE = True  #@param {type:"boolean"}
 
 # MAP-Elite
 N_STEPS = 100  #@param {type:"integer"}
@@ -57,6 +58,7 @@ sp = UniBinUniMemCMAMEimpPSE(
     lambda_=LAMBDA_,
     n_output=N_OUTPUT,
     n_init_samples=N_INIT_SAMPLES,
+    separable=SEPARABLE,
 )
 
 me = MAPElite(
