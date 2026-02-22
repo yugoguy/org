@@ -105,16 +105,20 @@ class BetaVAE_SSLVE(nn.Module):
         var_n = logvar_neighbors.exp()
         kl = 0.5 * (logvar_b - logvar_neighbors + var_n / var_b
                      + (mu_neighbors - mu_b).pow(2) / var_b - 1.0)
-        kl_per_neighbor = kl.sum(dim=1)
+        kl_per_neighbor = kl.mean(dim=1)
 
         loss = torch.tensor(0.0, device=mu_batch.device)
+        n_active = 0
         offset = 0
         for c in counts:
             if c > 0:
                 loss = loss + kl_per_neighbor[offset:offset + c].mean()
+                n_active += 1
             offset += c
 
-        return loss / mu_batch.size(0)
+        if n_active == 0:
+            return torch.tensor(0.0, device=mu_batch.device)
+        return loss / n_active
 
     def fit(self, dataset, bin_ids=None, bins=None, epochs=100, batch_size=32,
             lr=1e-3, device='cpu', verbose=True, val_split=0.2):
