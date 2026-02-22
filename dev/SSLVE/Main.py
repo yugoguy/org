@@ -47,7 +47,11 @@ class SSLVE:
             train_kwargs = {}
 
         # Search
-        thetas = self.SP.sample(latent_module=self.LM, behavior_matching=self.BM)
+        thetas = self.SP.sample(
+            latent_module=self.LM,
+            collector=self.CO,
+            behavior_matching=self.BM,
+        )
 
         # Collect
         infos = []
@@ -173,7 +177,10 @@ class MAPElite:
         2. SP converts to agents, CO collects info
         3. BM updates archive
         """
-        thetas = self.SP.sample(behavior_matching=self.BM)
+        thetas = self.SP.sample(
+            collector=self.CO,
+            behavior_matching=self.BM,
+        )
 
         infos = []
         for theta in thetas:
