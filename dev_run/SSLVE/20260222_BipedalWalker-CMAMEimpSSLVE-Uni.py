@@ -6,8 +6,8 @@ import torch
 # Hyperparameters
 # =============================================================================
 # BipedalWalker
-MAX_STEPS = 200  #@param {type:"integer"}
-N_EPISODES = 3  #@param {type:"integer"}
+MAX_STEPS = 300  #@param {type:"integer"}
+N_EPISODES = 2  #@param {type:"integer"}
 
 # Agent Architecture
 ARCHITECTURE = [24, 64, 64, 4]  #@param
@@ -25,8 +25,9 @@ N_EMITTERS = 5  #@param {type:"integer"}
 N_GENERATIONS = 10  #@param {type:"integer"}
 SIGMA_INIT = 0.5  #@param {type:"number"}
 LAMBDA_ = 20  #@param {type:"integer"}
-N_OUTPUT = 40  #@param {type:"integer"}
+N_OUTPUT = 20  #@param {type:"integer"}
 N_INIT_SAMPLES = 200  #@param {type:"integer"}
+SEPARABLE = True  #@param {type:"boolean"}
 
 # Latent Module
 LATENT_DIM = 128  #@param {type:"integer"}
@@ -38,7 +39,7 @@ BATCH_SIZE = 512  #@param {type:"integer"}
 LR = 1e-3  #@param {type:"number"}
 
 # SSLVE
-N_STEPS = 20  #@param {type:"integer"}
+N_STEPS = 100  #@param {type:"integer"}
 
 # General
 SEED = 42  #@param {type:"integer"}
@@ -79,6 +80,7 @@ sp = UniBinUniMemCMAMEimpLVE(
     n_output=N_OUTPUT,
     n_init_samples=N_INIT_SAMPLES,
     latent_dim=LATENT_DIM,
+    separable=SEPARABLE,
 )
 
 sslve = SSLVE(
