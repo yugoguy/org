@@ -29,7 +29,7 @@ LATENT_DIM = 128  #@param {type:"integer"}
 HIDDEN_DIMS = [512, 256]  #@param
 BETA = 1e-3  #@param {type:"number"}
 GAMMA_SSL = 0.0  #@param {type:"number"}
-EPOCHS = 100  #@param {type:"integer"}
+EPOCHS = 200  #@param {type:"integer"}
 BATCH_SIZE = 512  #@param {type:"integer"}
 LR = 1e-3  #@param {type:"number"}
 
