@@ -35,13 +35,9 @@ class SearchPhase(ABC):
         return agent
 
     @abstractmethod
-    def sample(self, latent_module=None, behavior_matching=None):
+    def sample(self, **kwargs):
         """
         Generate candidate thetas.
-
-        Args:
-            latent_module: LatentModule instance (None if not yet trained)
-            behavior_matching: BehaviorMatching instance (None at t=0)
 
         Returns:
             list of numpy arrays (candidate thetas)
@@ -96,7 +92,7 @@ class UniBinUniMemLVE:
             dim += self.architecture[i + 1]
         return dim
 
-    def sample(self, latent_module=None, behavior_matching=None):
+    def sample(self, latent_module=None, behavior_matching=None, **kwargs):
         """
         Generate candidate thetas.
 
@@ -180,7 +176,7 @@ class UniBinUniMemPSE:
             parts.append(b)
         return np.concatenate(parts)
 
-    def sample(self, behavior_matching=None):
+    def sample(self, behavior_matching=None, **kwargs):
         """
         Generate candidate thetas.
 
@@ -216,11 +212,9 @@ class UniBinUniMemCMAMEimpPSE:
     Each sample() call runs n_emitters, each:
     1. Pick random occupied bin, random member as CMA-ES mean
     2. Run CMA-ES for n_generations with improvement-based selection
-    3. Output top mu (=lambda_//2) from final generation
+    3. Sample n_output fresh candidates from the final adapted distribution
 
-    All emitters' outputs are stacked as the candidates.
-    Returns (thetas, infos) since collection happens inside emitters.
-
+    All emitters' outputs are stacked as the returned thetas.
     Fallback: He-init random samples when archive is empty.
 
     Args:
@@ -230,13 +224,14 @@ class UniBinUniMemCMAMEimpPSE:
         n_emitters: number of emitters per sample() call
         n_generations: CMA-ES generations per emitter
         sigma_init: initial CMA-ES step size
-        lambda_: CMA-ES population size per emitter
+        lambda_: CMA-ES population size per generation (for internal selection)
+        n_output: number of fresh samples per emitter to output
         n_init_samples: number of He-init samples when archive empty
     """
 
     def __init__(self, agent_class, architecture, agent_kwargs=None,
                  n_emitters=5, n_generations=10, sigma_init=1.0,
-                 lambda_=20, n_init_samples=200):
+                 lambda_=20, n_output=20, n_init_samples=200):
         self.agent_class = agent_class
         self.architecture = architecture
         self.agent_kwargs = agent_kwargs or {}
@@ -245,10 +240,10 @@ class UniBinUniMemCMAMEimpPSE:
         self.sigma_init = sigma_init
         self.lambda_ = lambda_
         self.mu = lambda_ // 2
+        self.n_output = n_output
         self.n_init_samples = n_init_samples
         self.dim = self._weight_dim()
 
-        # CMA-ES weights for weighted recombination
         self._init_cma_weights()
 
     def _init_cma_weights(self):
@@ -260,7 +255,6 @@ class UniBinUniMemCMAMEimpPSE:
         self.mu_eff = 1.0 / np.sum(weights ** 2)
 
         n = self.dim
-        # Learning rates
         self.c_sigma = (self.mu_eff + 2) / (n + self.mu_eff + 5)
         self.d_sigma = 1 + 2 * max(0, np.sqrt((self.mu_eff - 1) / (n + 1)) - 1) + self.c_sigma
         self.c_c = (4 + self.mu_eff / n) / (n + 4 + 2 * self.mu_eff / n)
@@ -315,44 +309,33 @@ class UniBinUniMemCMAMEimpPSE:
         Run one CMA-ES improvement emitter.
 
         Returns:
-            (thetas, infos): lists of length mu, the selected individuals
-                from the final generation.
+            list of n_output thetas sampled from the final adapted distribution.
         """
-        # Pick random bin, random member
         bin_ids = list(bm.bins_idx.keys())
         bid = bin_ids[np.random.randint(len(bin_ids))]
         members = bm.bins_idx[bid]
         idx = members[np.random.randint(len(members))]
         mean = bm.dataset[idx].copy()
 
-        # CMA-ES state
         sigma = self.sigma_init
         n = self.dim
         C = np.eye(n)
         p_sigma = np.zeros(n)
         p_c = np.zeros(n)
 
-        last_selected_thetas = None
-        last_selected_infos = None
-
         for gen in range(self.n_generations):
-            # Sample lambda candidates
-            # Eigendecomposition for sampling
             eigvals, eigvecs = np.linalg.eigh(C)
             eigvals = np.maximum(eigvals, 1e-20)
             D = np.sqrt(eigvals)
             B = eigvecs
 
             candidates = []
-            z_vectors = []
             for _ in range(self.lambda_):
                 z = np.random.randn(n)
                 x = mean + sigma * (B @ (D * z))
                 candidates.append(x)
-                z_vectors.append(z)
 
-            # Evaluate each candidate
-            eval_results = []  # (score, theta, info, random_tiebreak)
+            eval_results = []
             for theta in candidates:
                 agent = self.make_agent(theta)
                 info = collector.collect(agent)
@@ -360,27 +343,16 @@ class UniBinUniMemCMAMEimpPSE:
                 descriptor = bm.behavior_descriptor.describe(info)
                 bin_id = bm.behavior_descriptor.discretize(descriptor)
                 score = self._score(bin_id, fitness, bm)
-                eval_results.append((score, np.random.random(), theta, info))
+                eval_results.append((score, np.random.random(), theta))
 
-            # Rank: higher score better, ties broken randomly
             eval_results.sort(key=lambda x: (-x[0], x[1]))
+            selected_thetas = [s[2] for s in eval_results[:self.mu]]
 
-            # Select top mu
-            selected = eval_results[:self.mu]
-            selected_thetas = [s[2] for s in selected]
-            selected_infos = [s[3] for s in selected]
-
-            last_selected_thetas = selected_thetas
-            last_selected_infos = selected_infos
-
-            # CMA-ES update
             old_mean = mean.copy()
-            # Weighted mean
             mean = np.zeros(n)
             for i, theta in enumerate(selected_thetas):
                 mean += self.weights[i] * theta
 
-            # Evolution paths
             invsqrtC = B @ np.diag(1.0 / D) @ B.T
             mean_diff = (mean - old_mean) / sigma
             p_sigma = ((1 - self.c_sigma) * p_sigma
@@ -395,45 +367,46 @@ class UniBinUniMemCMAMEimpPSE:
                    + h_sigma * np.sqrt(self.c_c * (2 - self.c_c) * self.mu_eff)
                    * mean_diff)
 
-            # Covariance update
             artmp = np.array([(theta - old_mean) / sigma for theta in selected_thetas])
             C = ((1 - self.c_1 - self.c_mu_cov + (1 - h_sigma) * self.c_1 * self.c_c * (2 - self.c_c)) * C
                  + self.c_1 * np.outer(p_c, p_c)
                  + self.c_mu_cov * sum(self.weights[i] * np.outer(artmp[i], artmp[i])
                                        for i in range(self.mu)))
 
-            # Sigma update
             sigma *= np.exp((self.c_sigma / self.d_sigma)
                             * (np.linalg.norm(p_sigma) / self.chi_n - 1))
 
-        return last_selected_thetas, last_selected_infos
+        # Sample n_output fresh candidates from final adapted distribution
+        eigvals, eigvecs = np.linalg.eigh(C)
+        eigvals = np.maximum(eigvals, 1e-20)
+        D = np.sqrt(eigvals)
+        B = eigvecs
 
-    def sample(self, collector, behavior_matching):
+        output = []
+        for _ in range(self.n_output):
+            z = np.random.randn(n)
+            x = mean + sigma * (B @ (D * z))
+            output.append(x)
+
+        return output
+
+    def sample(self, collector, behavior_matching, **kwargs):
         """
-        Generate candidate thetas with cached infos.
+        Generate candidate thetas.
 
         Args:
-            collector: Collector instance
+            collector: Collector instance (needed for internal CMA-ES evaluation)
             behavior_matching: BehaviorMatching instance (read-only during emitting)
 
         Returns:
-            (thetas, infos): lists of numpy arrays and info dicts
+            list of numpy arrays (candidate thetas)
         """
         if len(behavior_matching.bins) == 0:
-            # Fallback: He-init, collect info for each
-            thetas = [self._he_init() for _ in range(self.n_init_samples)]
-            infos = []
-            for theta in thetas:
-                agent = self.make_agent(theta)
-                info = collector.collect(agent)
-                infos.append(info)
-            return thetas, infos
+            return [self._he_init() for _ in range(self.n_init_samples)]
 
         all_thetas = []
-        all_infos = []
         for _ in range(self.n_emitters):
-            thetas, infos = self._run_emitter(collector, behavior_matching)
+            thetas = self._run_emitter(collector, behavior_matching)
             all_thetas.extend(thetas)
-            all_infos.extend(infos)
 
-        return all_thetas, all_infos
+        return all_thetas
