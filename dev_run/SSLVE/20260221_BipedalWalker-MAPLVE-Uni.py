@@ -133,7 +133,7 @@ obs = env.reset(seed=42)
 if isinstance(obs, tuple):
     obs = obs[0]
 frames = [env.render()]
-for _ in range(1600):
+for _ in range(300):
     action = agent.act(obs)
     step_result = env.step(action)
     obs, reward, terminated, truncated = step_result[0], step_result[1], step_result[2], step_result[3]
