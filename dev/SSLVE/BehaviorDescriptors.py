@@ -174,6 +174,9 @@ class PlanarArmBD_CVT:
         elif centers == "random":
             rng = np.random.RandomState(seed)
             self.centers = self._sample_unit_circle(n_bins, radius, rng)
+        elif centers == "Precomputed_CVT_1950":
+            self.centers = self._precomp1950()
+            self.n_bins = len(self.centers)
         else:
             raise ValueError(f"Unknown centers option: {centers}")
 
@@ -229,3 +232,9 @@ class PlanarArmBD_CVT:
 
     def total_bins(self):
         return self.n_bins
+
+    def _precomp1950(self):
+        """Precomputed CVT centers (1950 bins, radius=1.0, seed=0, 100 iters, 100k samples)."""
+        return np.array([
+            # PASTE ARRAY HERE
+        ])
