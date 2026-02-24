@@ -8,6 +8,7 @@ import torch
 N_JOINTS = 100  #@param {type:"integer"}
 
 N_BINS = 1950  #@param {type:"integer"}
+CENTERS = "random"  #@param {type:"string"}
 
 TOP_K = 3  #@param {type:"integer"}
 N_SAMPLES = 200  #@param {type:"integer"}
@@ -29,7 +30,7 @@ fitness_fn = lambda info: info['angle_variance']
 init_fn = lambda: np.random.uniform(-np.pi, np.pi, N_JOINTS)
 
 collector = PlanarArmCollector(n_joints=N_JOINTS)
-bd = PlanarArmBD_CVT(n_bins=N_BINS)
+bd = PlanarArmBD_CVT(n_bins=N_BINS, centers=CENTERS)
 bm = MAPElitesBM(behavior_descriptor=bd, fitness_fn=fitness_fn, top_k=TOP_K)
 
 sp = UniBinUniMemPSE(
@@ -50,7 +51,7 @@ me = MAPElite(
 # Run
 # =============================================================================
 print(f"N joints: {N_JOINTS}")
-print(f"N bins (CVT): {N_BINS}")
+print(f"N bins: {N_BINS} ({CENTERS})")
 print()
 
 me.run(n_steps=N_STEPS)
