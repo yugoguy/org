@@ -141,3 +141,48 @@ class CartPoleBD_v1:
         for n in self.bin_sizes:
             result *= n
         return result
+
+
+
+class PlanarArmBD_v1:
+    """
+    2D behavior descriptor for planar arm:
+    (end_effector_x, end_effector_y)
+
+    Args:
+        bin_ranges: list of (min, max) per dimension
+        bin_sizes: list of number of bins per dimension
+    """
+
+    def __init__(self, bin_ranges=None, bin_sizes=None):
+        if bin_ranges is None:
+            bin_ranges = [(-1.0, 1.0), (-1.0, 1.0)]
+        if bin_sizes is None:
+            bin_sizes = [50, 50]
+        self.bin_ranges = bin_ranges
+        self.bin_sizes = bin_sizes
+
+    def describe(self, info):
+        """
+        Args:
+            info: dict from PlanarArmCollector.collect()
+
+        Returns:
+            (x, y) end-effector position
+        """
+        return info['end_effector']
+
+    def discretize(self, descriptor):
+        bin_id = []
+        for val, (lo, hi), n_bins in zip(descriptor, self.bin_ranges, self.bin_sizes):
+            clamped = np.clip(val, lo, hi)
+            idx = int((clamped - lo) / (hi - lo) * n_bins)
+            idx = min(idx, n_bins - 1)
+            bin_id.append(idx)
+        return tuple(bin_id)
+
+    def total_bins(self):
+        result = 1
+        for n in self.bin_sizes:
+            result *= n
+        return result
