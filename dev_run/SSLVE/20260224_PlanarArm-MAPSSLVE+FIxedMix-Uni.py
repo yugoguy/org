@@ -16,10 +16,10 @@ N_LVE_MUTATION = 100  #@param {type:"integer"}
 N_LVE_CROSSOVER = 50  #@param {type:"integer"}
 
 LATENT_DIM = 32  #@param {type:"integer"}
-HIDDEN_DIMS = [128, 64]  #@param
+HIDDEN_DIMS = [64]  #@param
 BETA = 1e-3  #@param {type:"number"}
 GAMMA_SSL = 1e-3  #@param {type:"number"}
-EPOCHS = 200  #@param {type:"integer"}
+EPOCHS = 100  #@param {type:"integer"}
 BATCH_SIZE = 256  #@param {type:"integer"}
 LR = 1e-3  #@param {type:"number"}
 
