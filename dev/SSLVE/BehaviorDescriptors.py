@@ -144,23 +144,55 @@ class CartPoleBD_v1:
 
 
 
-class PlanarArmBD_v1:
+class PlanarArmBD_CVT:
     """
-    2D behavior descriptor for planar arm:
-    (end_effector_x, end_effector_y)
+    CVT-based behavior descriptor for planar arm.
+    Precomputes Centroidal Voronoi Tessellation centers inside a unit circle.
+    discretize() assigns BD to nearest center.
 
     Args:
-        bin_ranges: list of (min, max) per dimension
-        bin_sizes: list of number of bins per dimension
+        n_bins: number of CVT bins
+        radius: radius of reachable region
+        cvt_iters: number of Lloyd's algorithm iterations
+        cvt_samples: number of random samples per iteration for centroid estimation
+        seed: random seed for CVT computation
     """
 
-    def __init__(self, bin_ranges=None, bin_sizes=None):
-        if bin_ranges is None:
-            bin_ranges = [(-1.0, 1.0), (-1.0, 1.0)]
-        if bin_sizes is None:
-            bin_sizes = [50, 50]
-        self.bin_ranges = bin_ranges
-        self.bin_sizes = bin_sizes
+    def __init__(self, n_bins=1950, radius=1.0, cvt_iters=100, cvt_samples=100000, seed=0):
+        self.n_bins = n_bins
+        self.radius = radius
+        self.centers = self._compute_cvt(n_bins, radius, cvt_iters, cvt_samples, seed)
+
+    def _sample_unit_circle(self, n, radius, rng):
+        """Sample n points uniformly inside a circle of given radius."""
+        angles = rng.uniform(0, 2 * np.pi, n)
+        radii = radius * np.sqrt(rng.uniform(0, 1, n))
+        x = radii * np.cos(angles)
+        y = radii * np.sin(angles)
+        return np.column_stack([x, y])
+
+    def _compute_cvt(self, n_bins, radius, cvt_iters, cvt_samples, seed):
+        """Compute CVT centers via Lloyd's algorithm."""
+        rng = np.random.RandomState(seed)
+        centers = self._sample_unit_circle(n_bins, radius, rng)
+
+        for _ in range(cvt_iters):
+            samples = self._sample_unit_circle(cvt_samples, radius, rng)
+            # Assign samples to nearest center
+            diffs = samples[:, None, :] - centers[None, :, :]
+            dists = np.sum(diffs ** 2, axis=2)
+            assignments = np.argmin(dists, axis=1)
+            # Update centers to centroids
+            new_centers = np.empty_like(centers)
+            for i in range(n_bins):
+                mask = assignments == i
+                if mask.any():
+                    new_centers[i] = samples[mask].mean(axis=0)
+                else:
+                    new_centers[i] = centers[i]
+            centers = new_centers
+
+        return centers
 
     def describe(self, info):
         """
@@ -173,16 +205,15 @@ class PlanarArmBD_v1:
         return info['end_effector']
 
     def discretize(self, descriptor):
-        bin_id = []
-        for val, (lo, hi), n_bins in zip(descriptor, self.bin_ranges, self.bin_sizes):
-            clamped = np.clip(val, lo, hi)
-            idx = int((clamped - lo) / (hi - lo) * n_bins)
-            idx = min(idx, n_bins - 1)
-            bin_id.append(idx)
-        return tuple(bin_id)
+        """
+        Assign descriptor to nearest CVT center.
+
+        Returns:
+            int bin index
+        """
+        point = np.array(descriptor)
+        dists = np.sum((self.centers - point) ** 2, axis=1)
+        return int(np.argmin(dists))
 
     def total_bins(self):
-        result = 1
-        for n in self.bin_sizes:
-            result *= n
-        return result
+        return self.n_bins
