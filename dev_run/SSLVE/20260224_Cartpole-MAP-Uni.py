@@ -6,7 +6,7 @@ import torch
 # Hyperparameters
 # =============================================================================
 MAX_STEPS = 200
-N_EPISODES = 3
+N_EPISODES = 5
 
 ARCHITECTURE = [4, 32, 2]
 OUTPUT_ACTIVATION = 'argmax'
