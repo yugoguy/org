@@ -91,3 +91,64 @@ class BipedalWalkerCollector:
             env.close()
 
         return info
+
+
+
+ class CartPoleCollector:
+    """
+    Collector for CartPole-v1.
+
+    Args:
+        max_steps: max steps per episode
+        n_episodes: number of episodes
+        seed: random seed
+    """
+
+    def __init__(self, max_steps=500, n_episodes=3, seed=None):
+        self.max_steps = max_steps
+        self.n_episodes = n_episodes
+        self.seed = seed
+
+    def collect(self, agent):
+        """
+        Returns:
+            dict with keys:
+                'reward': list of total reward per episode
+                'steps': list of steps per episode
+                'cart_positions': list of arrays of cart position per timestep
+                'actions': list of arrays of actions per timestep
+        """
+        import gymnasium as gym
+        import numpy as np
+
+        info = {
+            'reward': [],
+            'steps': [],
+            'cart_positions': [],
+            'actions': [],
+        }
+
+        for ep in range(self.n_episodes):
+            env = gym.make('CartPole-v1')
+            seed = self.seed + ep if self.seed is not None else None
+            obs, _ = env.reset(seed=seed)
+            ep_reward = 0
+            positions = []
+            actions = []
+
+            for _ in range(self.max_steps):
+                action = agent.act(obs)
+                obs, reward, terminated, truncated, _ = env.step(action)
+                ep_reward += reward
+                positions.append(obs[0])
+                actions.append(action)
+                if terminated or truncated:
+                    break
+
+            info['reward'].append(ep_reward)
+            info['steps'].append(len(positions))
+            info['cart_positions'].append(np.array(positions))
+            info['actions'].append(np.array(actions))
+            env.close()
+
+        return info
