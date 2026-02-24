@@ -9,7 +9,12 @@ import torch
 N_JOINTS = 100  #@param {type:"integer"}
 
 N_BINS = 1950  #@param {type:"integer"}
-CENTERS = "random"  #@param {type:"string"}
+CENTERS = "Precomputed_CVT_1950"  #@param {type:"string"}
+print(f"""You chose {CENTERS} as your CVT configuration. Note below:
+- Precomputed_CVT_1950 ... Precomputed CVT centers at seed 42. Only N_BINS = 1950 is supported.
+- CVT ... It requires new configuration of CVT. It supports any N_BINS, but it takes time. Saving the obtained bd.center for later use is highly recommended.
+- random ... Quick and sufficient for quick run. However, uniformity as in CVT is not guranteed, so behavior coverage evaluation is a bit degraded. 
+""")
 
 TOP_K = 3  #@param {type:"integer"}
 N_SAMPLES = 200  #@param {type:"integer"}
