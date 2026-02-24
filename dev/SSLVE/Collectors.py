@@ -152,3 +152,40 @@ class CartPoleCollector:
             env.close()
 
         return info
+
+
+
+class PlanarArmCollector:
+    """
+    Collector for planar arm inverse kinematics.
+    Computes forward kinematics from joint angles.
+
+    Args:
+        n_joints: number of joints
+        link_length: length of each link (default: 1/n_joints for unit total length)
+    """
+
+    def __init__(self, n_joints, link_length=None):
+        self.n_joints = n_joints
+        self.link_length = link_length if link_length is not None else 1.0 / n_joints
+
+    def collect(self, agent):
+        """
+        Compute FK from agent's joint angles.
+
+        Returns:
+            dict with keys:
+                'joint_angles': numpy array of angles
+                'end_effector': (x, y) tuple
+                'angle_variance': float
+        """
+        angles = agent.angles
+        cumulative = np.cumsum(angles)
+        x = np.sum(self.link_length * np.cos(cumulative))
+        y = np.sum(self.link_length * np.sin(cumulative))
+
+        return {
+            'joint_angles': angles,
+            'end_effector': (float(x), float(y)),
+            'angle_variance': float(np.var(angles)),
+        }
