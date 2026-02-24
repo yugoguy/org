@@ -778,3 +778,111 @@ class UniBinUniMemCMAMEimpLVE:
             all_thetas.extend(thetas)
 
         return all_thetas
+
+
+
+class UniBinUniMemFixedMix:
+    """
+    Search phase: uniform over bins, uniform within bin.
+    Three variation operators:
+        - PSE mutation (parameter space Gaussian noise)
+        - LVE mutation (latent space Gaussian noise)
+        - LVE crossover (latent space random-alpha interpolation of two parents)
+    Each can be turned off by setting its count to 0.
+
+    Args:
+        agent_class: class with architecture info
+        architecture: list of layer dims
+        agent_kwargs: dict for agent constructor
+        mutation_sigma: noise std for both PSE and LVE mutation
+        n_pse: number of PSE mutation samples
+        n_lve_mutation: number of LVE mutation samples
+        n_lve_crossover: number of LVE crossover samples
+    """
+
+    def __init__(self, agent_class, architecture, agent_kwargs=None,
+                 mutation_sigma=0.3, n_pse=0, n_lve_mutation=0, n_lve_crossover=0):
+        self.agent_class = agent_class
+        self.architecture = architecture
+        self.agent_kwargs = agent_kwargs or {}
+        self.mutation_sigma = mutation_sigma
+        self.n_pse = n_pse
+        self.n_lve_mutation = n_lve_mutation
+        self.n_lve_crossover = n_lve_crossover
+
+    def make_agent(self, theta):
+        agent = self.agent_class(self.architecture, **self.agent_kwargs)
+        agent.set_weights(theta)
+        return agent
+
+    def _he_init(self):
+        parts = []
+        for i in range(len(self.architecture) - 1):
+            fan_in = self.architecture[i]
+            fan_out = self.architecture[i + 1]
+            std = np.sqrt(2.0 / fan_in)
+            W = np.random.randn(fan_in * fan_out) * std
+            b = np.zeros(fan_out)
+            parts.append(W)
+            parts.append(b)
+        return np.concatenate(parts)
+
+    def _select_parent(self, bm):
+        """Uniform bin -> uniform member. Returns dataset index."""
+        bin_ids = list(bm.bins_idx.keys())
+        bid = bin_ids[np.random.randint(len(bin_ids))]
+        members = bm.bins_idx[bid]
+        return members[np.random.randint(len(members))]
+
+    def sample(self, latent_module=None, behavior_matching=None, **kwargs):
+        n_total = self.n_pse + self.n_lve_mutation + self.n_lve_crossover
+
+        if latent_module is None or behavior_matching is None or len(behavior_matching.bins) == 0:
+            return [self._he_init() for _ in range(max(n_total, 1))]
+
+        bm = behavior_matching
+        candidates = []
+
+        # PSE mutation
+        for _ in range(self.n_pse):
+            idx = self._select_parent(bm)
+            parent = bm.dataset[idx]
+            child = parent + self.mutation_sigma * np.random.randn(len(parent))
+            candidates.append(child)
+
+        if self.n_lve_mutation == 0 and self.n_lve_crossover == 0:
+            return candidates
+
+        device = next(latent_module.parameters()).device
+        latent_module.eval()
+
+        # LVE mutation
+        if self.n_lve_mutation > 0:
+            indices = [self._select_parent(bm) for _ in range(self.n_lve_mutation)]
+            thetas = np.array([bm.dataset[i] for i in indices])
+            with torch.no_grad():
+                x = torch.tensor(thetas, dtype=torch.float32).to(device)
+                mu, logvar = latent_module.encode_dist(x)
+                std = torch.exp(0.5 * logvar)
+                z = mu + std * torch.randn_like(std)
+                z = z + self.mutation_sigma * torch.randn_like(z)
+                decoded = latent_module.decode(z)
+            candidates.extend([d.cpu().numpy() for d in decoded])
+
+        # LVE crossover
+        if self.n_lve_crossover > 0:
+            indices_a = [self._select_parent(bm) for _ in range(self.n_lve_crossover)]
+            indices_b = [self._select_parent(bm) for _ in range(self.n_lve_crossover)]
+            thetas_a = np.array([bm.dataset[i] for i in indices_a])
+            thetas_b = np.array([bm.dataset[i] for i in indices_b])
+            with torch.no_grad():
+                xa = torch.tensor(thetas_a, dtype=torch.float32).to(device)
+                xb = torch.tensor(thetas_b, dtype=torch.float32).to(device)
+                mu_a = latent_module.encode(xa)
+                mu_b = latent_module.encode(xb)
+                alpha = torch.rand(self.n_lve_crossover, 1, device=device)
+                z = alpha * mu_a + (1 - alpha) * mu_b
+                decoded = latent_module.decode(z)
+            candidates.extend([d.cpu().numpy() for d in decoded])
+
+        return candidates
