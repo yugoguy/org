@@ -94,7 +94,7 @@ class BipedalWalkerCollector:
 
 
 
- class CartPoleCollector:
+class CartPoleCollector:
     """
     Collector for CartPole-v1.
 
