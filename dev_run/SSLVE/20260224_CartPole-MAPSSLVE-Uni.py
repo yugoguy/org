@@ -14,7 +14,7 @@ OUTPUT_ACTIVATION = 'argmax'  #@param {type:"string"}
 BIN_RANGES = [(-2.4, 2.4), (0.0, 1.0)]  #@param
 BIN_SIZES = [20, 20]  #@param
 
-TOP_K = 5  #@param {type:"integer"}
+TOP_K = 3  #@param {type:"integer"}
 N_SAMPLES = 200  #@param {type:"integer"}
 MUTATION_SIGMA = 0.3  #@param {type:"number"}
 
