@@ -49,7 +49,7 @@ class UniBinUniMemLVE:
     """
     Search phase: uniform over bins, uniform within bin.
     Encodes selected theta via LM, mutates in latent space, decodes.
-    Falls back to He-initialized random thetas if no LM available.
+    Falls back to init_fn (default: He-init) random thetas if no LM available.
 
     Args:
         agent_class: class with architecture info
@@ -57,15 +57,17 @@ class UniBinUniMemLVE:
         agent_kwargs: dict for agent constructor (e.g. output_activation)
         mutation_sigma: noise std added in latent space
         n_samples: number of candidates to generate per call
+        init_fn: callable() -> numpy array, custom init (default: He-init)
     """
 
     def __init__(self, agent_class, architecture, agent_kwargs=None,
-                 mutation_sigma=0.1, n_samples=50):
+                 mutation_sigma=0.1, n_samples=50, init_fn=None):
         self.agent_class = agent_class
         self.architecture = architecture
         self.agent_kwargs = agent_kwargs or {}
         self.mutation_sigma = mutation_sigma
         self.n_samples = n_samples
+        self.init_fn = init_fn
 
     def make_agent(self, theta):
         agent = self.agent_class(self.architecture, **self.agent_kwargs)
@@ -85,6 +87,11 @@ class UniBinUniMemLVE:
             parts.append(b)
         return np.concatenate(parts)
 
+    def _init(self):
+        if self.init_fn is not None:
+            return self.init_fn()
+        return self._he_init()
+
     def _weight_dim(self):
         dim = 0
         for i in range(len(self.architecture) - 1):
@@ -96,7 +103,7 @@ class UniBinUniMemLVE:
         """
         Generate candidate thetas.
 
-        If no LM: He-initialized random thetas.
+        If no LM: init_fn random thetas.
         If LM available: uniform sample from archive, encode (mu + sigma * noise),
         add mutation noise, decode.
 
@@ -108,7 +115,7 @@ class UniBinUniMemLVE:
             list of numpy arrays (candidate thetas)
         """
         if latent_module is None or behavior_matching is None or len(behavior_matching.bins) == 0:
-            return [self._he_init() for _ in range(self.n_samples)]
+            return [self._init() for _ in range(self.n_samples)]
 
         # Uniform over bins, uniform within bin
         bin_ids = list(behavior_matching.bins_idx.keys())
@@ -141,7 +148,7 @@ class UniBinUniMemPSE:
     """
     Search phase: uniform over bins, uniform within bin.
     Mutates directly in parameter space (no latent module).
-    Falls back to He-initialized random thetas if archive empty.
+    Falls back to init_fn (default: He-init) random thetas if archive empty.
 
     Args:
         agent_class: class with architecture info
@@ -149,15 +156,17 @@ class UniBinUniMemPSE:
         agent_kwargs: dict for agent constructor
         mutation_sigma: noise std added in weight space
         n_samples: number of candidates per call
+        init_fn: callable() -> numpy array, custom init (default: He-init)
     """
 
     def __init__(self, agent_class, architecture, agent_kwargs=None,
-                 mutation_sigma=0.1, n_samples=50):
+                 mutation_sigma=0.1, n_samples=50, init_fn=None):
         self.agent_class = agent_class
         self.architecture = architecture
         self.agent_kwargs = agent_kwargs or {}
         self.mutation_sigma = mutation_sigma
         self.n_samples = n_samples
+        self.init_fn = init_fn
 
     def make_agent(self, theta):
         agent = self.agent_class(self.architecture, **self.agent_kwargs)
@@ -176,11 +185,16 @@ class UniBinUniMemPSE:
             parts.append(b)
         return np.concatenate(parts)
 
+    def _init(self):
+        if self.init_fn is not None:
+            return self.init_fn()
+        return self._he_init()
+
     def sample(self, behavior_matching=None, **kwargs):
         """
         Generate candidate thetas.
 
-        If archive empty: He-initialized random thetas.
+        If archive empty: init_fn random thetas.
         Otherwise: uniform bin -> uniform member -> Gaussian noise in weight space.
 
         Args:
@@ -190,7 +204,7 @@ class UniBinUniMemPSE:
             list of numpy arrays
         """
         if behavior_matching is None or len(behavior_matching.bins) == 0:
-            return [self._he_init() for _ in range(self.n_samples)]
+            return [self._init() for _ in range(self.n_samples)]
 
         bin_ids = list(behavior_matching.bins_idx.keys())
         candidates = []
@@ -215,7 +229,7 @@ class UniBinUniMemCMAMEimpPSE:
     3. Sample n_output fresh candidates from the final adapted distribution
 
     All emitters' outputs are stacked as the returned thetas.
-    Fallback: He-init random samples when archive is empty.
+    Fallback: init_fn (default: He-init) random samples when archive is empty.
 
     Args:
         agent_class: class with set_weights/act
@@ -226,12 +240,14 @@ class UniBinUniMemCMAMEimpPSE:
         sigma_init: initial CMA-ES step size
         lambda_: CMA-ES population size per generation (for internal selection)
         n_output: number of fresh samples per emitter to output
-        n_init_samples: number of He-init samples when archive empty
+        n_init_samples: number of init samples when archive empty
+        init_fn: callable() -> numpy array, custom init (default: He-init)
     """
 
     def __init__(self, agent_class, architecture, agent_kwargs=None,
                  n_emitters=5, n_generations=10, sigma_init=1.0,
-                 lambda_=20, n_output=20, n_init_samples=200, separable=False):
+                 lambda_=20, n_output=20, n_init_samples=200, separable=False,
+                 init_fn=None):
         self.agent_class = agent_class
         self.architecture = architecture
         self.agent_kwargs = agent_kwargs or {}
@@ -243,6 +259,7 @@ class UniBinUniMemCMAMEimpPSE:
         self.n_output = n_output
         self.n_init_samples = n_init_samples
         self.separable = separable
+        self.init_fn = init_fn
         self.dim = self._weight_dim()
 
         self._init_cma_weights()
@@ -288,6 +305,11 @@ class UniBinUniMemCMAMEimpPSE:
             parts.append(b)
         return np.concatenate(parts)
 
+    def _init(self):
+        if self.init_fn is not None:
+            return self.init_fn()
+        return self._he_init()
+
     def _score(self, bin_id, fitness, bm):
         """
         Improvement score: read-only check against bm archive.
@@ -324,7 +346,6 @@ class UniBinUniMemCMAMEimpPSE:
         p_c = np.zeros(n)
 
         if self.separable:
-            # Diagonal covariance: store as vector
             C_diag = np.ones(n)
 
             for gen in range(self.n_generations):
@@ -378,7 +399,6 @@ class UniBinUniMemCMAMEimpPSE:
                 sigma *= np.exp((self.c_sigma / self.d_sigma)
                                 * (np.linalg.norm(p_sigma) / self.chi_n - 1))
 
-            # Final output
             D = np.sqrt(np.maximum(C_diag, 1e-20))
             output = []
             for _ in range(self.n_output):
@@ -387,7 +407,6 @@ class UniBinUniMemCMAMEimpPSE:
                 output.append(x)
 
         else:
-            # Full covariance
             C = np.eye(n)
 
             for gen in range(self.n_generations):
@@ -444,7 +463,6 @@ class UniBinUniMemCMAMEimpPSE:
                 sigma *= np.exp((self.c_sigma / self.d_sigma)
                                 * (np.linalg.norm(p_sigma) / self.chi_n - 1))
 
-            # Final output
             eigvals, eigvecs = np.linalg.eigh(C)
             eigvals = np.maximum(eigvals, 1e-20)
             D = np.sqrt(eigvals)
@@ -470,7 +488,7 @@ class UniBinUniMemCMAMEimpPSE:
             list of numpy arrays (candidate thetas)
         """
         if len(behavior_matching.bins) == 0:
-            return [self._he_init() for _ in range(self.n_init_samples)]
+            return [self._init() for _ in range(self.n_init_samples)]
 
         all_thetas = []
         for _ in range(self.n_emitters):
@@ -492,7 +510,7 @@ class UniBinUniMemCMAMEimpLVE:
     4. Sample n_output fresh candidates from final adapted latent distribution, decode
 
     All emitters' decoded outputs are stacked as the returned thetas.
-    Fallback: He-init random samples when no LM or archive empty.
+    Fallback: init_fn (default: He-init) random samples when no LM or archive empty.
 
     Args:
         agent_class: class with set_weights/act
@@ -503,14 +521,15 @@ class UniBinUniMemCMAMEimpLVE:
         sigma_init: initial CMA-ES step size in latent space
         lambda_: CMA-ES population size per generation
         n_output: number of fresh samples per emitter to output
-        n_init_samples: number of He-init samples when archive/LM unavailable
+        n_init_samples: number of init samples when archive/LM unavailable
         latent_dim: latent space dimensionality (must match latent_module)
+        init_fn: callable() -> numpy array, custom init (default: He-init)
     """
 
     def __init__(self, agent_class, architecture, agent_kwargs=None,
                  n_emitters=5, n_generations=10, sigma_init=0.5,
                  lambda_=20, n_output=20, n_init_samples=200, latent_dim=128,
-                 separable=False):
+                 separable=False, init_fn=None):
         self.agent_class = agent_class
         self.architecture = architecture
         self.agent_kwargs = agent_kwargs or {}
@@ -523,6 +542,7 @@ class UniBinUniMemCMAMEimpLVE:
         self.n_init_samples = n_init_samples
         self.latent_dim = latent_dim
         self.separable = separable
+        self.init_fn = init_fn
 
         self._init_cma_weights()
 
@@ -559,6 +579,11 @@ class UniBinUniMemCMAMEimpLVE:
             parts.append(W)
             parts.append(b)
         return np.concatenate(parts)
+
+    def _init(self):
+        if self.init_fn is not None:
+            return self.init_fn()
+        return self._he_init()
 
     def _score(self, bin_id, fitness, bm):
         """
@@ -769,7 +794,7 @@ class UniBinUniMemCMAMEimpLVE:
             list of numpy arrays (candidate thetas)
         """
         if latent_module is None or behavior_matching is None or len(behavior_matching.bins) == 0:
-            return [self._he_init() for _ in range(self.n_init_samples)]
+            return [self._init() for _ in range(self.n_init_samples)]
 
         latent_module.eval()
         all_thetas = []
@@ -801,7 +826,8 @@ class UniBinUniMemFixedMix:
     """
 
     def __init__(self, agent_class, architecture, agent_kwargs=None,
-                 mutation_sigma=0.3, n_pse=0, n_lve_mutation=0, n_lve_crossover=0):
+                 mutation_sigma=0.3, n_pse=0, n_lve_mutation=0, n_lve_crossover=0,
+                 init_fn=None):
         self.agent_class = agent_class
         self.architecture = architecture
         self.agent_kwargs = agent_kwargs or {}
@@ -809,6 +835,7 @@ class UniBinUniMemFixedMix:
         self.n_pse = n_pse
         self.n_lve_mutation = n_lve_mutation
         self.n_lve_crossover = n_lve_crossover
+        self.init_fn = init_fn
 
     def make_agent(self, theta):
         agent = self.agent_class(self.architecture, **self.agent_kwargs)
@@ -827,6 +854,11 @@ class UniBinUniMemFixedMix:
             parts.append(b)
         return np.concatenate(parts)
 
+    def _init(self):
+        if self.init_fn is not None:
+            return self.init_fn()
+        return self._he_init()
+
     def _select_parent(self, bm):
         """Uniform bin -> uniform member. Returns dataset index."""
         bin_ids = list(bm.bins_idx.keys())
@@ -838,7 +870,7 @@ class UniBinUniMemFixedMix:
         n_total = self.n_pse + self.n_lve_mutation + self.n_lve_crossover
 
         if latent_module is None or behavior_matching is None or len(behavior_matching.bins) == 0:
-            return [self._he_init() for _ in range(max(n_total, 1))]
+            return [self._init() for _ in range(max(n_total, 1))]
 
         bm = behavior_matching
         candidates = []
