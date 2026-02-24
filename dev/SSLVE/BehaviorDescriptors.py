@@ -147,21 +147,35 @@ class CartPoleBD_v1:
 class PlanarArmBD_CVT:
     """
     CVT-based behavior descriptor for planar arm.
-    Precomputes Centroidal Voronoi Tessellation centers inside a unit circle.
     discretize() assigns BD to nearest center.
 
     Args:
-        n_bins: number of CVT bins
+        n_bins: number of bins
+        centers: center initialization method
+            - "cvt": compute CVT via Lloyd's algorithm
+            - "random": random sample inside unit circle
+            - np.ndarray of shape (n_bins, 2): use directly
         radius: radius of reachable region
-        cvt_iters: number of Lloyd's algorithm iterations
-        cvt_samples: number of random samples per iteration for centroid estimation
-        seed: random seed for CVT computation
+        cvt_iters: Lloyd's algorithm iterations (only if centers="cvt")
+        cvt_samples: samples per iteration (only if centers="cvt")
+        seed: random seed for center computation
     """
 
-    def __init__(self, n_bins=1950, radius=1.0, cvt_iters=100, cvt_samples=100000, seed=0):
+    def __init__(self, n_bins=1950, centers="random", radius=1.0,
+                 cvt_iters=100, cvt_samples=100000, seed=0):
         self.n_bins = n_bins
         self.radius = radius
-        self.centers = self._compute_cvt(n_bins, radius, cvt_iters, cvt_samples, seed)
+
+        if isinstance(centers, np.ndarray):
+            self.centers = centers
+            self.n_bins = len(centers)
+        elif centers == "cvt":
+            self.centers = self._compute_cvt(n_bins, radius, cvt_iters, cvt_samples, seed)
+        elif centers == "random":
+            rng = np.random.RandomState(seed)
+            self.centers = self._sample_unit_circle(n_bins, radius, rng)
+        else:
+            raise ValueError(f"Unknown centers option: {centers}")
 
     def _sample_unit_circle(self, n, radius, rng):
         """Sample n points uniformly inside a circle of given radius."""
@@ -178,11 +192,9 @@ class PlanarArmBD_CVT:
 
         for _ in range(cvt_iters):
             samples = self._sample_unit_circle(cvt_samples, radius, rng)
-            # Assign samples to nearest center
             diffs = samples[:, None, :] - centers[None, :, :]
             dists = np.sum(diffs ** 2, axis=2)
             assignments = np.argmin(dists, axis=1)
-            # Update centers to centroids
             new_centers = np.empty_like(centers)
             for i in range(n_bins):
                 mask = assignments == i
@@ -206,7 +218,7 @@ class PlanarArmBD_CVT:
 
     def discretize(self, descriptor):
         """
-        Assign descriptor to nearest CVT center.
+        Assign descriptor to nearest center.
 
         Returns:
             int bin index
