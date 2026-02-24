@@ -68,3 +68,23 @@ class MLP_Agent:
             return np.tanh(x)
         else:
             return x
+
+
+
+class PlanarArmAgent:
+    """
+    Agent for planar arm IK. Stores joint angles as weights.
+
+    Args:
+        architecture: int, number of joints (n_joints)
+    """
+
+    def __init__(self, architecture, **kwargs):
+        self.n_joints = architecture
+        self.angles = None
+
+    def get_weight_dim(self):
+        return self.n_joints
+
+    def set_weights(self, flat_weights):
+        self.angles = flat_weights
