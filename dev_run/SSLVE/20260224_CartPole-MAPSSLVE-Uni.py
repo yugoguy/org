@@ -20,7 +20,7 @@ MUTATION_SIGMA = 0.3  #@param {type:"number"}
 
 LATENT_DIM = 32  #@param {type:"integer"}
 HIDDEN_DIMS = [96]  #@param
-BETA = 1e-3  #@param {type:"number"}
+BETA = 1e-1  #@param {type:"number"}
 GAMMA_SSL = 1e-3  #@param {type:"number"}
 EPOCHS = 200  #@param {type:"integer"}
 BATCH_SIZE = 256  #@param {type:"integer"}
