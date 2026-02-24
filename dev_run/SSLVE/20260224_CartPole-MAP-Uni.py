@@ -5,22 +5,22 @@ import torch
 # =============================================================================
 # Hyperparameters
 # =============================================================================
-MAX_STEPS = 200
-N_EPISODES = 5
+MAX_STEPS = 200  #@param {type:"integer"}
+N_EPISODES = 5  #@param {type:"integer"}
 
-ARCHITECTURE = [4, 32, 2]
-OUTPUT_ACTIVATION = 'argmax'
+ARCHITECTURE = [4, 32, 2]  #@param
+OUTPUT_ACTIVATION = 'argmax'  #@param {type:"string"}
 
-BIN_RANGES = [(-2.4, 2.4), (0.0, 1.0)]
-BIN_SIZES = [20, 20]
+BIN_RANGES = [(-2.4, 2.4), (0.0, 1.0)]  #@param
+BIN_SIZES = [20, 20]  #@param
 
-TOP_K = 5
-N_SAMPLES = 200
-MUTATION_SIGMA = 0.3
+TOP_K = 5  #@param {type:"integer"}
+N_SAMPLES = 200  #@param {type:"integer"}
+MUTATION_SIGMA = 0.3  #@param {type:"number"}
 
-N_STEPS = 100
+N_STEPS = 100  #@param {type:"integer"}
 
-SEED = 42
+SEED = 42  #@param {type:"integer"}
 
 random.seed(SEED)
 np.random.seed(SEED)
