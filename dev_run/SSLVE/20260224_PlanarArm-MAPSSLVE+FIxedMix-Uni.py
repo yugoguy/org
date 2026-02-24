@@ -8,6 +8,12 @@ import torch
 N_JOINTS = 100  #@param {type:"integer"}
 
 N_BINS = 1950  #@param {type:"integer"}
+CENTERS = "Precomputed_CVT_1950"  #@param {type:"string"}
+print(f"""You chose {CENTERS} as your CVT configuration. Note below:
+- Precomputed_CVT_1950 ... Precomputed CVT centers at seed 42. Only N_BINS = 1950 is supported.
+- CVT ... It requires new configuration of CVT. It supports any N_BINS, but it takes time. Saving the obtained bd.center for later use is highly recommended.
+- random ... Quick and sufficient for quick run. However, uniformity as in CVT is not guranteed, so behavior coverage evaluation is a bit degraded. 
+""")
 
 TOP_K = 3  #@param {type:"integer"}
 MUTATION_SIGMA = 0.3  #@param {type:"number"}
@@ -40,7 +46,7 @@ fitness_fn = lambda info: info['angle_variance']
 init_fn = lambda: np.random.uniform(-np.pi, np.pi, N_JOINTS)
 
 collector = PlanarArmCollector(n_joints=N_JOINTS)
-bd = PlanarArmBD_CVT(n_bins=N_BINS)
+bd = PlanarArmBD_CVT(n_bins=N_BINS, centers=CENTERS)
 bm = MAPElitesBM(behavior_descriptor=bd, fitness_fn=fitness_fn, top_k=TOP_K)
 
 lm = BetaVAE_SSLVE(
@@ -75,7 +81,7 @@ sslve = SSLVE(
 print(f"N joints: {N_JOINTS}")
 print(f"Latent dim: {LATENT_DIM}")
 print(f"Device: {DEVICE}")
-print(f"N bins (CVT): {N_BINS}")
+print(f"N bins: {N_BINS} ({CENTERS})")
 print(f"Samples per step: {N_PSE} PSE + {N_LVE_MUTATION} LVE mut + {N_LVE_CROSSOVER} LVE xo = {N_PSE + N_LVE_MUTATION + N_LVE_CROSSOVER}")
 print()
 
