@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 class BetaVAE_SSLVE(nn.Module):
     """
-    Beta-VAE with non-contrastive SSL loss for SSLVE.
+    Beta-VAE with SSL loss for SSLVE.
 
     SSL loss: KL(q(z|θ') || q(z|θ)) where θ' is stop-grad bin-mate.
     Total loss = VAE loss + gamma_ssl * SSL loss
