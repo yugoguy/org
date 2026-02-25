@@ -18,43 +18,43 @@
 
 ```mermaid
 flowchart LR
+    START(("start"))
+
     subgraph SP["SearchPhase (SP)"]
         direction TB
-        BM_read1["BM.bins_idx\nBM.dataset"] --> select["select parent θ"]
-        select --> mutate["mutate(θ)"]
-        subgraph make["make_agent(θ')"]
-            AM1["Agent"]
+        sample["sample(behavior_matching)"]
+        sample -->|"θ"| make_agent["make_agent(θ)"]
+        subgraph AG1["Agent (AG)"]
+            agent1["agent"]
         end
-        mutate -->|"θ'"| make
+        make_agent --> AG1
     end
 
     subgraph CO["Collector (CO)"]
-        direction TB
         collect["collect(agent)"]
-        collect -->|"info dict"| out1[ ]
     end
 
     subgraph BM["BehaviorMatching (BM)"]
         direction TB
         subgraph BD["BehaviorDescriptor (BD)"]
             describe["describe(info)"]
-            discretize["discretize(descriptor)"]
-            describe --> discretize
+            describe -->|"descriptor"| discretize["discretize(descriptor)"]
         end
         fitness_fn["fitness_fn(info)"]
-        discretize -->|"bin_id"| update["update archive\ntop-k per bin"]
+        discretize -->|"bin_id"| update["update(thetas, infos)"]
         fitness_fn -->|"fitness"| update
     end
 
+    START --> SP
     SP -->|"agent"| CO
     CO -->|"θ, info"| BM
-    BM -.->|"bins_idx, dataset"| SP
+    BM -.->|"dataset, bins_idx"| SP
 
     style SP fill:#fdf0ef,stroke:#c0392b,color:#000
     style CO fill:#eef5fb,stroke:#2471a3,color:#000
     style BM fill:#f5eefb,stroke:#7d3c98,color:#000
     style BD fill:#fdf0f8,stroke:#b03070,color:#000
-    style AM1 fill:#fdf8ef,stroke:#b8860b,color:#000
+    style AG1 fill:#fdf8ef,stroke:#b8860b,color:#000
 ```
 
 ---
@@ -63,54 +63,50 @@ flowchart LR
 
 ```mermaid
 flowchart LR
+    START(("start"))
+
     subgraph SP["SearchPhase (SP)"]
         direction TB
-        BM_read["BM.bins_idx\nBM.dataset"] --> select["select parent θ"]
-        select --> vary["vary(θ)\nPSE / LVE / CMA"]
-        LM_use["LM.encode\nLM.decode"] --> vary
-        vary -->|"θ'"| make["make_agent(θ')"]
-        subgraph make["make_agent(θ')"]
-            AM2["Agent"]
+        sample["sample(latent_module, collector, behavior_matching)"]
+        sample -->|"θ"| make_agent["make_agent(θ)"]
+        subgraph AG2["Agent (AG)"]
+            agent2["agent"]
         end
+        make_agent --> AG2
     end
 
     subgraph CO["Collector (CO)"]
-        direction TB
         collect2["collect(agent)"]
-        collect2 -->|"info dict"| out2[ ]
     end
 
     subgraph BM["BehaviorMatching (BM)"]
         direction TB
         subgraph BD2["BehaviorDescriptor (BD)"]
             describe2["describe(info)"]
-            discretize2["discretize(descriptor)"]
-            describe2 --> discretize2
+            describe2 -->|"descriptor"| discretize2["discretize(descriptor)"]
         end
         fitness_fn2["fitness_fn(info)"]
-        discretize2 -->|"bin_id"| update2["update archive\ntop-k per bin"]
+        discretize2 -->|"bin_id"| update2["update(thetas, infos)"]
         fitness_fn2 -->|"fitness"| update2
     end
 
     subgraph LM["LatentModule (LM)"]
-        direction TB
         fit["fit(dataset, bin_ids, bins_idx)"]
-        enc["encode / decode"]
-        fit --> enc
     end
 
+    START --> SP
     SP -->|"agent"| CO
     CO -->|"θ, info"| BM
     BM -->|"dataset, bin_ids, bins_idx"| LM
-    LM -.->|"encode / decode"| SP
-    BM -.->|"bins_idx, dataset"| SP
+    LM -.->|"encode, decode"| SP
+    BM -.->|"dataset, bins_idx"| SP
 
     style SP fill:#fdf0ef,stroke:#c0392b,color:#000
     style CO fill:#eef5fb,stroke:#2471a3,color:#000
     style BM fill:#f5eefb,stroke:#7d3c98,color:#000
     style BD2 fill:#fdf0f8,stroke:#b03070,color:#000
     style LM fill:#eefbf2,stroke:#1e8449,color:#000
-    style AM2 fill:#fdf8ef,stroke:#b8860b,color:#000
+    style AG2 fill:#fdf8ef,stroke:#b8860b,color:#000
 ```
 
 ---
