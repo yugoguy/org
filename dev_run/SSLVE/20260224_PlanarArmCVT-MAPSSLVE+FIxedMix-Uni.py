@@ -19,8 +19,8 @@ print(f"""You chose {CENTERS} as your CVT configuration. Note below:
 TOP_K = 3  #@param {type:"integer"}
 MUTATION_SIGMA = 0.3  #@param {type:"number"}
 N_PSE = 50  #@param {type:"integer"}
-N_LVE_MUTATION = 100  #@param {type:"integer"}
-N_LVE_CROSSOVER = 50  #@param {type:"integer"}
+N_LVE_MUTATION = 75  #@param {type:"integer"}
+N_LVE_CROSSOVER = 75  #@param {type:"integer"}
 
 LATENT_DIM = 32  #@param {type:"integer"}
 HIDDEN_DIMS = [64]  #@param
