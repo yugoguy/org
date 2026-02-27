@@ -92,6 +92,9 @@ flowchart LR
 
     subgraph LM["LatentModule (LM)"]
         fit["fit(dataset, bin_ids, bins_idx)"]
+        fit --> AL1["AuxLoss₁"]
+        fit --> AL2["AuxLoss₂"]
+        fit --> ALn["AuxLoss ..."]
     end
 
     START --> SP
@@ -107,6 +110,9 @@ flowchart LR
     style BD2 fill:#fdf0f8,stroke:#b03070,color:#000
     style LM fill:#eefbf2,stroke:#1e8449,color:#000
     style AG2 fill:#fdf8ef,stroke:#b8860b,color:#000
+    style AL1 fill:#eefbf2,stroke:#1e8449,color:#000
+    style AL2 fill:#eefbf2,stroke:#1e8449,color:#000
+    style ALn fill:#eefbf2,stroke:#1e8449,color:#000
 ```
 
 ---
