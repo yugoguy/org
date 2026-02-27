@@ -157,35 +157,131 @@ class CartPoleCollector:
 
 class PlanarArmCollector:
     """
-    Collector for planar arm inverse kinematics.
-    Computes forward kinematics from joint angles.
+    Collector for planar arm inverse kinematics, generalized to N-dim.
+
+    N-dim FK uses spherical coordinates: each joint has (end_effector_dim - 1)
+    angles. For 2D this is 1 angle per joint (standard planar arm).
 
     Args:
         n_joints: number of joints
-        link_length: length of each link (default: 1/n_joints for unit total length)
+        end_effector_dim: dimension of end-effector space (default 2)
+        link_length: length of each link (default: 1/n_joints)
+        noise_sigma: std of Gaussian noise added to angles per episode (default 0)
+        n_episodes: number of noised episodes to average (default 1, ignored if noise_sigma=0)
     """
 
-    def __init__(self, n_joints, link_length=None):
+    def __init__(self, n_joints, end_effector_dim=2, link_length=None,
+                 noise_sigma=0.0, n_episodes=1):
         self.n_joints = n_joints
+        self.end_effector_dim = end_effector_dim
         self.link_length = link_length if link_length is not None else 1.0 / n_joints
+        self.noise_sigma = noise_sigma
+        self.n_episodes = n_episodes
+        self.angles_per_joint = end_effector_dim - 1
+
+    def _spherical_to_cartesian(self, angles_per_joint_array):
+        """
+        Convert (n_joints, angles_per_joint) spherical angles to unit direction vectors.
+        For 2D: angles shape (n_joints, 1), output (n_joints, 2).
+        For 3D: angles shape (n_joints, 2), output (n_joints, 3).
+        General N-dim: angles shape (n_joints, N-1), output (n_joints, N).
+
+        Uses cumulative angles per component, then standard spherical-to-cartesian.
+        """
+        n_joints = angles_per_joint_array.shape[0]
+        dim = self.end_effector_dim
+        k = self.angles_per_joint  # dim - 1
+
+        # Cumulative angles per component
+        cum_angles = np.cumsum(angles_per_joint_array, axis=0)  # (n_joints, k)
+
+        directions = np.ones((n_joints, dim))
+        for i in range(k):
+            # dimensions 0..i get sin(angle_i) factor
+            # dimension i+1..dim-1 keep cos(angle_i) factor at step i
+            # Standard spherical: x_0 = cos(a0), x_1 = sin(a0)cos(a1), ..., x_{k} = sin(a0)...sin(a_{k-1})
+            pass
+
+        # Spherical to cartesian (cumulative angles already applied)
+        # For dim=2: direction = (cos(cum_a0), sin(cum_a0))
+        # For dim=N: standard conversion
+        for j in range(n_joints):
+            a = cum_angles[j]  # (k,) angles
+            v = np.ones(dim)
+            for i in range(k):
+                v[i] *= np.cos(a[i])
+                for d in range(i + 1, dim):
+                    v[d] *= np.sin(a[i])
+            directions[j] = v
+
+        return directions
+
+    def _fk(self, angles_flat):
+        """
+        Forward kinematics from flat angle vector.
+
+        Args:
+            angles_flat: 1D array of length n_joints * angles_per_joint
+
+        Returns:
+            end_effector: tuple of floats, length end_effector_dim
+        """
+        angles = angles_flat.reshape(self.n_joints, self.angles_per_joint)
+        directions = self._spherical_to_cartesian(angles)
+        position = np.sum(self.link_length * directions, axis=0)
+        return tuple(float(x) for x in position)
+
+    def _compute_metrics(self, angles_flat):
+        """
+        Compute angle_variance and local_abs_dependency.
+
+        For 2D (1 angle per joint): returns scalars.
+        For >2D: returns lists, one per angle component.
+        """
+        k = self.angles_per_joint
+        angles = angles_flat.reshape(self.n_joints, k)
+
+        if k == 1:
+            angles_1d = angles[:, 0]
+            variance = float(np.var(angles_1d))
+            local_dep = float(np.sum(np.abs(np.diff(angles_1d))))
+            return variance, local_dep
+        else:
+            variances = [float(np.var(angles[:, c])) for c in range(k)]
+            local_deps = [float(np.sum(np.abs(np.diff(angles[:, c])))) for c in range(k)]
+            return variances, local_deps
 
     def collect(self, agent):
         """
-        Compute FK from agent's joint angles.
+        Compute FK from agent's joint angles, optionally with noise.
 
         Returns:
             dict with keys:
-                'joint_angles': numpy array of angles
-                'end_effector': (x, y) tuple
-                'angle_variance': float
+                'joint_angles': numpy array of angles (original, no noise)
+                'end_effector': tuple (mean over episodes if noised)
+                'angle_variance': float (2D) or list of floats (>2D)
+                'local_abs_dependency': float (2D) or list of floats (>2D)
         """
         angles = agent.angles
-        cumulative = np.cumsum(angles)
-        x = np.sum(self.link_length * np.cos(cumulative))
-        y = np.sum(self.link_length * np.sin(cumulative))
+        n_ep = 1 if self.noise_sigma == 0.0 else self.n_episodes
+
+        end_effectors = []
+        for _ in range(n_ep):
+            if self.noise_sigma > 0.0:
+                noised = angles + self.noise_sigma * np.random.randn(len(angles))
+            else:
+                noised = angles
+            ee = self._fk(noised)
+            end_effectors.append(ee)
+
+        mean_ee = tuple(float(np.mean([ee[d] for ee in end_effectors]))
+                        for d in range(self.end_effector_dim))
+
+        angle_variance, local_abs_dependency = self._compute_metrics(angles)
 
         return {
             'joint_angles': angles,
-            'end_effector': (float(x), float(y)),
-            'angle_variance': float(np.var(angles)),
+            'end_effector': mean_ee,
+            'angle_variance': angle_variance,
+            'local_abs_dependency': local_abs_dependency,
         }
