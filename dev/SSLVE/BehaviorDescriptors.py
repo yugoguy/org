@@ -146,55 +146,62 @@ class CartPoleBD_v1:
 
 class PlanarArmBD_CVT:
     """
-    CVT-based behavior descriptor for planar arm.
+    CVT-based behavior descriptor for planar arm, generalized to N-dim.
     discretize() assigns BD to nearest center.
 
     Args:
         n_bins: number of bins
         centers: center initialization method
             - "cvt": compute CVT via Lloyd's algorithm
-            - "random": random sample inside unit circle
-            - np.ndarray of shape (n_bins, 2): use directly
+            - "random": random uniform inside unit hypersphere
+            - "Precomputed_CVT_1950": precomputed 2D centers (bd_dim=2 only)
+            - np.ndarray of shape (n_bins, bd_dim): use directly
+        bd_dim: dimension of behavior descriptor space (default 2)
         radius: radius of reachable region
         cvt_iters: Lloyd's algorithm iterations (only if centers="cvt")
         cvt_samples: samples per iteration (only if centers="cvt")
         seed: random seed for center computation
     """
 
-    def __init__(self, n_bins=1950, centers="random", radius=1.0,
+    def __init__(self, n_bins=1950, centers="random", bd_dim=2, radius=1.0,
                  cvt_iters=100, cvt_samples=100000, seed=0):
         self.n_bins = n_bins
         self.radius = radius
+        self.bd_dim = bd_dim
 
         if isinstance(centers, np.ndarray):
             self.centers = centers
             self.n_bins = len(centers)
+            self.bd_dim = centers.shape[1]
         elif centers == "cvt":
-            self.centers = self._compute_cvt(n_bins, radius, cvt_iters, cvt_samples, seed)
+            self.centers = self._compute_cvt(n_bins, bd_dim, radius, cvt_iters, cvt_samples, seed)
         elif centers == "random":
             rng = np.random.RandomState(seed)
-            self.centers = self._sample_unit_circle(n_bins, radius, rng)
+            self.centers = self._sample_unit_ball(n_bins, bd_dim, radius, rng)
         elif centers == "Precomputed_CVT_1950":
+            assert bd_dim == 2, "Precomputed_CVT_1950 only supports bd_dim=2"
             self.centers = self._precomp1950()
             self.n_bins = len(self.centers)
         else:
             raise ValueError(f"Unknown centers option: {centers}")
 
-    def _sample_unit_circle(self, n, radius, rng):
-        """Sample n points uniformly inside a circle of given radius."""
-        angles = rng.uniform(0, 2 * np.pi, n)
-        radii = radius * np.sqrt(rng.uniform(0, 1, n))
-        x = radii * np.cos(angles)
-        y = radii * np.sin(angles)
-        return np.column_stack([x, y])
+    def _sample_unit_ball(self, n, bd_dim, radius, rng):
+        """Sample n points uniformly inside a hypersphere of given radius."""
+        # Muller method: sample on sphere surface, scale by random radius
+        gauss = rng.randn(n, bd_dim)
+        norms = np.linalg.norm(gauss, axis=1, keepdims=True)
+        norms = np.maximum(norms, 1e-10)
+        directions = gauss / norms
+        radii = radius * rng.uniform(0, 1, (n, 1)) ** (1.0 / bd_dim)
+        return directions * radii
 
-    def _compute_cvt(self, n_bins, radius, cvt_iters, cvt_samples, seed):
+    def _compute_cvt(self, n_bins, bd_dim, radius, cvt_iters, cvt_samples, seed):
         """Compute CVT centers via Lloyd's algorithm."""
         rng = np.random.RandomState(seed)
-        centers = self._sample_unit_circle(n_bins, radius, rng)
+        centers = self._sample_unit_ball(n_bins, bd_dim, radius, rng)
 
         for _ in range(cvt_iters):
-            samples = self._sample_unit_circle(cvt_samples, radius, rng)
+            samples = self._sample_unit_ball(cvt_samples, bd_dim, radius, rng)
             diffs = samples[:, None, :] - centers[None, :, :]
             dists = np.sum(diffs ** 2, axis=2)
             assignments = np.argmin(dists, axis=1)
@@ -215,7 +222,7 @@ class PlanarArmBD_CVT:
             info: dict from PlanarArmCollector.collect()
 
         Returns:
-            (x, y) end-effector position
+            tuple, end-effector position
         """
         return info['end_effector']
 
