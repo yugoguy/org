@@ -123,6 +123,7 @@ flowchart TD
 
     SP --> AG["Agent (AG)"]
     BM --> BD["BehaviorDescriptor (BD)"]
+    LM --> AL["AuxLoss (AL)"]
 
     style ORCH fill:#fdf8ef,stroke:#b8860b,color:#000
     style SP fill:#fdf0ef,stroke:#c0392b,color:#000
@@ -131,6 +132,7 @@ flowchart TD
     style LM fill:#eefbf2,stroke:#1e8449,color:#000
     style AG fill:#fdf8ef,stroke:#b8860b,color:#000
     style BD fill:#fdf0f8,stroke:#b03070,color:#000
+    style AL fill:#eefbf2,stroke:#1e8449,color:#000
 ```
 
 ---
@@ -177,6 +179,16 @@ flowchart TD
 | `encode` | `(x)` | `z` |
 | `encode_dist` | `(x)` | `(μ, logvar)` |
 | `decode` | `(z)` | `x̂` |
+
+> `BaseBetaVAE` accepts `aux_losses=[(weight, AuxLoss), ...]` at construction. During `fit`, the base model builds a context dict and calls each auxiliary loss. `BetaVAE_SSLVE` is a legacy standalone implementation with built-in SSL loss.
+
+### AuxLoss (AL) — supporting, inside LM
+
+| Method | Signature | Returns |
+|---|---|---|
+| `compute` | `(**context)` | `scalar tensor` |
+
+> Each AuxLoss has a `name` attribute used for logging. The context dict is base-model dependent; for `BaseBetaVAE` it includes: `x`, `x_recon`, `mu`, `logvar`, `z`, `batch_indices`, `bin_ids_batch`, `bins`, `dataset`, `model`.
 
 ### Agent (AG) — supporting, inside SP
 
@@ -231,3 +243,11 @@ Same Collector (same info dict), just different BD extraction/discretization. Pa
 | 1 | New **BehaviorMatching (BM)** | `update(thetas, infos)` |
 
 Must expose `dataset`, `bin_ids`, `bins_idx`, `fitnesses`, `bins` for SP and LM to read. Contains a BD instance.
+
+### ⑤ New auxiliary loss for latent module
+
+| # | What to implement | Key methods |
+|---|---|---|
+| 1 | New **AuxLoss (AL)** | `compute(**context) → scalar tensor` |
+
+Set `self.name` for logging. Picks needed keys from the context dict provided by the base model. Pass to `BaseBetaVAE` as `aux_losses=[(weight, aux)]`.
