@@ -3,6 +3,7 @@ import torch
 import numpy as np
 
 
+
 class AuxLoss(ABC):
     """
     Abstract auxiliary loss for latent modules.
@@ -24,6 +25,7 @@ class AuxLoss(ABC):
             scalar tensor
         """
         pass
+
 
 
 class BinLatentKL(AuxLoss):
