@@ -42,6 +42,7 @@ class BehaviorMatching(ABC):
         pass
         
 
+
 class MAPElitesBM:
     """
     MAP-Elites style behavior matching with top-k per bin.
@@ -49,6 +50,10 @@ class MAPElitesBM:
     self.bins always stores {bin_id: [(theta, fitness), ...]}.
     _rebuild() creates index-based views for LM training:
         self.dataset, self.fitnesses, self.bin_ids, self.bins_idx
+
+    When compute_rewards is True, update() stores self.rewards:
+        a list of floats, one per candidate.
+        0.0 if not inserted, 1/(rank+1) if inserted at rank.
 
     Args:
         behavior_descriptor: object with describe(info) and discretize(descriptor)
@@ -65,6 +70,8 @@ class MAPElitesBM:
         self.fitnesses = []
         self.bin_ids = []
         self.bins_idx = {}  # {bin_id: [dataset_indices]}
+        self.compute_rewards = False
+        self.rewards = None
 
     def update(self, thetas, infos):
         """
@@ -74,6 +81,8 @@ class MAPElitesBM:
             thetas: list of numpy arrays
             infos: list of info dicts from Collector.collect()
         """
+        rewards = [] if self.compute_rewards else None
+
         for theta, info in zip(thetas, infos):
             descriptor = self.behavior_descriptor.describe(info)
             bin_id = self.behavior_descriptor.discretize(descriptor)
@@ -81,13 +90,31 @@ class MAPElitesBM:
 
             if bin_id not in self.bins:
                 self.bins[bin_id] = []
+
             self.bins[bin_id].append((theta, fitness))
 
-            # Keep top-k per bin (lowest fitness = best, since minimizing)
             if len(self.bins[bin_id]) > self.top_k:
                 self.bins[bin_id].sort(key=lambda x: x[1])
+                removed = self.bins[bin_id][self.top_k:]
                 self.bins[bin_id] = self.bins[bin_id][:self.top_k]
 
+                if self.compute_rewards:
+                    # Check if this theta survived the cut
+                    inserted = any(t is theta for t, _ in self.bins[bin_id])
+                    if inserted:
+                        rank = next(i for i, (t, _) in enumerate(self.bins[bin_id]) if t is theta)
+                        rewards.append(1.0 / (rank + 1))
+                    else:
+                        rewards.append(0.0)
+                        
+            else:
+                if self.compute_rewards:
+                    # Inserted into a bin that wasn't full yet
+                    self.bins[bin_id].sort(key=lambda x: x[1])
+                    rank = next(i for i, (t, _) in enumerate(self.bins[bin_id]) if t is theta)
+                    rewards.append(1.0 / (rank + 1))
+
+        self.rewards = rewards
         self._rebuild()
 
     def _rebuild(self):
