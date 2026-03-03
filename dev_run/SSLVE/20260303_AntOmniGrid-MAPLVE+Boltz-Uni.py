@@ -112,8 +112,7 @@ histories = sslve.run(n_steps=N_STEPS, train_kwargs=train_kwargs)
 # Results
 # =============================================================================
 f_min, f_mean, f_max = bm.fitness_stats()
-print(f"
-Final archive size: {bm.archive_size()}")
+print(f"Final archive size: {bm.archive_size()}")
 print(f"Final coverage: {bm.coverage():.6f}")
 print(f"Best fitness: {f_min:.4f}")
 
