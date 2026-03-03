@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import torch
+import torch.nn as nn
 import numpy as np
 
 
@@ -88,3 +89,37 @@ class BinLatentKL(AuxLoss):
         if n_active == 0:
             return torch.tensor(0.0, device=device)
         return loss / n_active
+
+
+
+class BinPred(AuxLoss, nn.Module):
+    """
+    Auxiliary loss: predict bin center value from latent z via linear layer.
+    Loss is MSE between predicted and target bin center, backpropagated through encoder.
+
+    Args:
+        behavior_descriptor: BD instance with bin_value(bin_id) method
+        latent_dim: latent space dimension
+        output_dim: dimension of bin center value (e.g. 2 for 2D end-effector)
+    """
+
+    def __init__(self, behavior_descriptor, latent_dim, output_dim):
+        AuxLoss.__init__(self)
+        nn.Module.__init__(self)
+        self.name = "bin_pred"
+        self.bd = behavior_descriptor
+        self.predictor = nn.Linear(latent_dim, output_dim)
+
+    def compute(self, **context):
+        z = context['z']
+        bin_ids_batch = context['bin_ids_batch']
+        device = z.device
+
+        targets = torch.tensor(
+            np.array([self.bd.bin_value(bid) for bid in bin_ids_batch]),
+            dtype=torch.float32,
+            device=device,
+        )
+
+        pred = self.predictor(z)
+        return nn.functional.mse_loss(pred, targets)
