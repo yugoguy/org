@@ -16,8 +16,8 @@ BIN_RANGES = [(-100.0, 100.0), (-100.0, 100.0)]  #@param
 BIN_SIZES = [100, 100]  #@param
 
 TOP_K = 3  #@param {type:"integer"}
-PSE_SIGMA = 0.2  #@param {type:"number"}
-LVE_SIGMA = 0.1  #@param {type:"number"}
+PSE_SIGMA = 0.01  #@param {type:"number"}
+LVE_SIGMA = 0.05  #@param {type:"number"}
 N_TOTAL = 500  #@param {type:"integer"}
 WARMUP_THRESHOLD = 512  #@param {type:"integer"}
 EMA_ALPHA = 0.3  #@param {type:"number"}
