@@ -87,4 +87,4 @@ class PlanarArmAgent:
         return self.n_joints
 
     def set_weights(self, flat_weights):
-        self.angles = flat_weights
+        self.angles = np.clip(flat_weights, -np.pi, np.pi)
