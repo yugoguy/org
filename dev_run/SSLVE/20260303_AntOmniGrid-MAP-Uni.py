@@ -17,7 +17,7 @@ BIN_SIZES = [100, 100]  #@param
 
 TOP_K = 3  #@param {type:"integer"}
 N_SAMPLES = 500  #@param {type:"integer"}
-MUTATION_SIGMA = 0.2  #@param {type:"number"}
+MUTATION_SIGMA = 0.01  #@param {type:"number"}
 
 N_STEPS = 1000  #@param {type:"integer"}
 
