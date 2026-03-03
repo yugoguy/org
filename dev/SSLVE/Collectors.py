@@ -232,24 +232,20 @@ class PlanarArmCollector:
         return tuple(float(x) for x in position)
 
     def _compute_metrics(self, angles_flat):
-        """
-        Compute angle_variance and local_abs_dependency.
-
-        For 2D (1 angle per joint): returns scalars.
-        For >2D: returns lists, one per angle component.
-        """
         k = self.angles_per_joint
         angles = angles_flat.reshape(self.n_joints, k)
-
+    
         if k == 1:
             angles_1d = angles[:, 0]
             variance = float(np.var(angles_1d))
             local_dep = float(np.sum(np.abs(np.diff(angles_1d))))
-            return variance, local_dep
+            sine_dep = float(np.mean((angles_1d[:-1] - np.pi * np.sin(angles_1d[1:])) ** 2))
+            return variance, local_dep, sine_dep
         else:
             variances = [float(np.var(angles[:, c])) for c in range(k)]
             local_deps = [float(np.sum(np.abs(np.diff(angles[:, c])))) for c in range(k)]
-            return variances, local_deps
+            sine_deps = [float(np.mean((angles[:-1, c] - np.pi * np.sin(angles[1:, c])) ** 2)) for c in range(k)]
+            return variances, local_deps, sine_deps
 
     def collect(self, agent):
         """
