@@ -24,6 +24,7 @@ class BaseBetaVAE(nn.Module):
         self.latent_dim = latent_dim
         self.beta = beta
         self.aux_losses = aux_losses or []
+        self.skip_training = False
 
         # Encoder
         enc_layers = []
@@ -78,6 +79,8 @@ class BaseBetaVAE(nn.Module):
     def fit(self, dataset, bin_ids=None, bins=None, epochs=100, batch_size=32,
             lr=1e-3, device='cpu', verbose=True, val_split=0.2):
         self.to(device)
+        if self.skip_training:
+            return {}
         has_aux = len(self.aux_losses) > 0 and bin_ids is not None and bins is not None
 
         data = torch.tensor(np.array(dataset), dtype=torch.float32)
