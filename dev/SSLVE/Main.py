@@ -54,11 +54,19 @@ class SSLVE:
         )
 
         # Collect
+        import time
         infos = []
-        for theta in thetas:
+        n_total = len(thetas)
+        t_start = time.time()
+        for i, theta in enumerate(thetas):
             agent = self.SP.make_agent(theta)
             info = self.CO.collect(agent)
             infos.append(info)
+            elapsed = time.time() - t_start
+            rate = (i + 1) / elapsed if elapsed > 0 else 0
+            eta = (n_total - i - 1) / rate if rate > 0 else 0
+            print(f"\rCollecting: {i+1}/{n_total} [{elapsed:.0f}s elapsed, {eta:.0f}s remaining]", end="", flush=True)
+        print()
 
         # Update archive
         self.BM.update(thetas, infos)
@@ -182,11 +190,19 @@ class MAPElite:
             behavior_matching=self.BM,
         )
 
+        import time
         infos = []
-        for theta in thetas:
+        n_total = len(thetas)
+        t_start = time.time()
+        for i, theta in enumerate(thetas):
             agent = self.SP.make_agent(theta)
             info = self.CO.collect(agent)
             infos.append(info)
+            elapsed = time.time() - t_start
+            rate = (i + 1) / elapsed if elapsed > 0 else 0
+            eta = (n_total - i - 1) / rate if rate > 0 else 0
+            print(f"\rCollecting: {i+1}/{n_total} [{elapsed:.0f}s elapsed, {eta:.0f}s remaining]", end="", flush=True)
+        print()
 
         self.BM.update(thetas, infos)
 
