@@ -1054,6 +1054,8 @@ class UniBinUniMemBoltzmannMix:
             self.prev_tags = None
             if bm is not None:
                 bm.compute_rewards = False
+            if latent_module is not None:
+                latent_module.skip_training = True
             self._record_allocation(self.n_total, 0, 0)
             return [self._init() for _ in range(self.n_total)]
 
@@ -1062,8 +1064,12 @@ class UniBinUniMemBoltzmannMix:
             if bm.archive_size() >= self.warmup_threshold:
                 self.warmed_up = True
                 bm.compute_rewards = True
+                if latent_module is not None:
+                    latent_module.skip_training = False
             else:
                 bm.compute_rewards = False
+                if latent_module is not None:
+                    latent_module.skip_training = True
                 candidates = []
                 tags = []
                 for _ in range(self.n_total):
