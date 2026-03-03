@@ -935,9 +935,10 @@ class UniBinUniMemBoltzmannMix:
 
     Args:
         agent_class: class with architecture info
-        architecture: list of layer dims or int
+        architecture: list of layer dims
         agent_kwargs: dict for agent constructor
-        mutation_sigma: noise std for PSE and LVE mutation
+        pse_sigma: noise std for PSE mutation in weight space
+        lve_sigma: noise std for LVE mutation in latent space
         n_total: total samples per step
         warmup_threshold: archive size before LVE starts
         ema_alpha: EMA decay rate for reward tracking
@@ -947,13 +948,14 @@ class UniBinUniMemBoltzmannMix:
     """
 
     def __init__(self, agent_class, architecture, agent_kwargs=None,
-                 mutation_sigma=0.3, n_total=200, warmup_threshold=100,
+                 pse_sigma=0.2, lve_sigma=0.1, n_total=200, warmup_threshold=100,
                  ema_alpha=0.3, temperature=1.0, min_proportion=0.05,
                  init_fn=None):
         self.agent_class = agent_class
         self.architecture = architecture
         self.agent_kwargs = agent_kwargs or {}
-        self.mutation_sigma = mutation_sigma
+        self.pse_sigma = pse_sigma
+        self.lve_sigma = lve_sigma
         self.n_total = n_total
         self.warmup_threshold = warmup_threshold
         self.ema_alpha = ema_alpha
@@ -998,15 +1000,13 @@ class UniBinUniMemBoltzmannMix:
     def _softmax_allocation(self):
         """Compute per-operator sample counts via softmax over EMA rates."""
         logits = self.ema_rates / self.temperature
-        logits = logits - np.max(logits)  # numerical stability
+        logits = logits - np.max(logits)
         exp_logits = np.exp(logits)
         probs = exp_logits / np.sum(exp_logits)
 
-        # Enforce minimum proportion
         min_count = max(1, int(self.n_total * self.min_proportion))
         counts = np.maximum(np.round(probs * self.n_total).astype(int), min_count)
 
-        # Adjust to hit n_total exactly
         diff = self.n_total - np.sum(counts)
         if diff > 0:
             best = np.argmax(probs)
@@ -1017,7 +1017,7 @@ class UniBinUniMemBoltzmannMix:
                 if counts[worst] > min_count:
                     counts[worst] -= 1
 
-        return counts[0], counts[1], counts[2]  # n_pse, n_lve_mut, n_lve_xo
+        return counts[0], counts[1], counts[2]
 
     def _update_ema(self, rewards, tags):
         """Update EMA rates from per-candidate rewards and operator tags."""
@@ -1049,14 +1049,13 @@ class UniBinUniMemBoltzmannMix:
                 self.warmed_up = True
                 bm.compute_rewards = True
             else:
-                # Still warming up: pure PSE
                 bm.compute_rewards = False
                 candidates = []
                 tags = []
                 for _ in range(self.n_total):
                     idx = self._select_parent(bm)
                     parent = bm.dataset[idx]
-                    child = parent + self.mutation_sigma * np.random.randn(len(parent))
+                    child = parent + self.pse_sigma * np.random.randn(len(parent))
                     candidates.append(child)
                     tags.append('pse')
                 self.prev_tags = tags
@@ -1072,7 +1071,7 @@ class UniBinUniMemBoltzmannMix:
         for _ in range(n_pse):
             idx = self._select_parent(bm)
             parent = bm.dataset[idx]
-            child = parent + self.mutation_sigma * np.random.randn(len(parent))
+            child = parent + self.pse_sigma * np.random.randn(len(parent))
             candidates.append(child)
             tags.append('pse')
 
@@ -1089,7 +1088,7 @@ class UniBinUniMemBoltzmannMix:
                     mu, logvar = latent_module.encode_dist(x)
                     std = torch.exp(0.5 * logvar)
                     z = mu + std * torch.randn_like(std)
-                    z = z + self.mutation_sigma * torch.randn_like(z)
+                    z = z + self.lve_sigma * torch.randn_like(z)
                     decoded = latent_module.decode(z)
                 for d in decoded:
                     candidates.append(d.cpu().numpy())
@@ -1116,7 +1115,7 @@ class UniBinUniMemBoltzmannMix:
             for _ in range(n_lve_mut + n_lve_xo):
                 idx = self._select_parent(bm)
                 parent = bm.dataset[idx]
-                child = parent + self.mutation_sigma * np.random.randn(len(parent))
+                child = parent + self.pse_sigma * np.random.randn(len(parent))
                 candidates.append(child)
                 tags.append('pse')
 
