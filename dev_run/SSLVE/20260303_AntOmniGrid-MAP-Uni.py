@@ -6,7 +6,7 @@ import torch
 # =============================================================================
 # Hyperparameters
 # =============================================================================
-ARCHITECTURE = [87, 128, 128, 8]  #@param
+ARCHITECTURE = [87, 96, 96, 8]  #@param
 OUTPUT_ACTIVATION = 'tanh'  #@param {type:"string"}
 
 MAX_STEPS = 500  #@param {type:"integer"}
