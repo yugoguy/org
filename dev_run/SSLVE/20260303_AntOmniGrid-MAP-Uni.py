@@ -15,7 +15,7 @@ N_EPISODES = 2  #@param {type:"integer"}
 BIN_RANGES = [(-100.0, 100.0), (-100.0, 100.0)]  #@param
 BIN_SIZES = [100, 100]  #@param
 
-TOP_K = 1  #@param {type:"integer"}
+TOP_K = 3  #@param {type:"integer"}
 N_SAMPLES = 500  #@param {type:"integer"}
 MUTATION_SIGMA = 0.2  #@param {type:"number"}
 
