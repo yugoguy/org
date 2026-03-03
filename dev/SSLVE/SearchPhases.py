@@ -968,6 +968,10 @@ class UniBinUniMemBoltzmannMix:
         self.prev_tags = None
         self.warmed_up = False
 
+        # Allocation history for plotting
+        self.allocation_history = []
+        self.ema_history = []
+
     def make_agent(self, theta):
         agent = self.agent_class(self.architecture, **self.agent_kwargs)
         agent.set_weights(theta)
@@ -1029,6 +1033,15 @@ class UniBinUniMemBoltzmannMix:
                 self.ema_rates[i] = (self.ema_alpha * mean_reward
                                      + (1 - self.ema_alpha) * self.ema_rates[i])
 
+    def _record_allocation(self, n_pse, n_lve_mut, n_lve_xo):
+        """Record allocation and EMA state, print current ratio."""
+        self.allocation_history.append((n_pse, n_lve_mut, n_lve_xo))
+        self.ema_history.append(tuple(self.ema_rates.copy()))
+        total = n_pse + n_lve_mut + n_lve_xo
+        print(f"  Operator ratio - PSE: {n_pse}/{total} ({n_pse/total:.0%}), "
+              f"LVE_mut: {n_lve_mut}/{total} ({n_lve_mut/total:.0%}), "
+              f"LVE_xo: {n_lve_xo}/{total} ({n_lve_xo/total:.0%})")
+
     def sample(self, latent_module=None, behavior_matching=None, **kwargs):
         bm = behavior_matching
 
@@ -1041,6 +1054,7 @@ class UniBinUniMemBoltzmannMix:
             self.prev_tags = None
             if bm is not None:
                 bm.compute_rewards = False
+            self._record_allocation(self.n_total, 0, 0)
             return [self._init() for _ in range(self.n_total)]
 
         # Check warmup
@@ -1059,10 +1073,12 @@ class UniBinUniMemBoltzmannMix:
                     candidates.append(child)
                     tags.append('pse')
                 self.prev_tags = tags
+                self._record_allocation(self.n_total, 0, 0)
                 return candidates
 
         # Adaptive phase: allocate via softmax
         n_pse, n_lve_mut, n_lve_xo = self._softmax_allocation()
+        self._record_allocation(n_pse, n_lve_mut, n_lve_xo)
 
         candidates = []
         tags = []
@@ -1121,3 +1137,44 @@ class UniBinUniMemBoltzmannMix:
 
         self.prev_tags = tags
         return candidates
+
+    def plot_allocation(self, save_path=None):
+        """Plot operator allocation ratio and EMA rates over steps."""
+        import matplotlib.pyplot as plt
+
+        if not self.allocation_history:
+            print("No allocation history to plot.")
+            return
+
+        history = np.array(self.allocation_history, dtype=float)
+        totals = history.sum(axis=1, keepdims=True)
+        totals = np.maximum(totals, 1)
+        ratios = history / totals
+
+        steps = np.arange(len(ratios))
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+
+        ax1.stackplot(steps, ratios[:, 0], ratios[:, 1], ratios[:, 2],
+                       labels=['PSE', 'LVE mutation', 'LVE crossover'],
+                       colors=['#2196F3', '#FF9800', '#4CAF50'], alpha=0.8)
+        ax1.set_ylabel('Proportion')
+        ax1.set_title('Operator Allocation Over Steps')
+        ax1.legend(loc='upper right')
+        ax1.set_ylim(0, 1)
+
+        if self.ema_history:
+            ema = np.array(self.ema_history)
+            ax2.plot(steps, ema[:, 0], label='PSE', color='#2196F3')
+            ax2.plot(steps, ema[:, 1], label='LVE mutation', color='#FF9800')
+            ax2.plot(steps, ema[:, 2], label='LVE crossover', color='#4CAF50')
+            ax2.set_ylabel('EMA Reward Rate')
+            ax2.set_title('EMA Reward Rates Over Steps')
+            ax2.legend(loc='upper right')
+
+        ax2.set_xlabel('Step')
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.show()
