@@ -6,22 +6,22 @@ import torch
 # =============================================================================
 # Hyperparameters
 # =============================================================================
-ARCHITECTURE = [87, 64, 64, 8]
-OUTPUT_ACTIVATION = 'tanh'
+ARCHITECTURE = [87, 128, 128, 8]  #@param
+OUTPUT_ACTIVATION = 'tanh'  #@param {type:"string"}
 
-MAX_STEPS = 500
-N_EPISODES = 2
+MAX_STEPS = 500  #@param {type:"integer"}
+N_EPISODES = 2  #@param {type:"integer"}
 
-BIN_RANGES = [(-100.0, 100.0), (-100.0, 100.0)]
-BIN_SIZES = [100, 100]
+BIN_RANGES = [(-100.0, 100.0), (-100.0, 100.0)]  #@param
+BIN_SIZES = [100, 100]  #@param
 
-TOP_K = 3
-N_SAMPLES = 200
-MUTATION_SIGMA = 0.1
+TOP_K = 3  #@param {type:"integer"}
+N_SAMPLES = 200  #@param {type:"integer"}
+MUTATION_SIGMA = 0.1  #@param {type:"number"}
 
-N_STEPS = 100
+N_STEPS = 100  #@param {type:"integer"}
 
-SEED = 42
+SEED = 42  #@param {type:"integer"}
 
 random.seed(SEED)
 np.random.seed(SEED)
