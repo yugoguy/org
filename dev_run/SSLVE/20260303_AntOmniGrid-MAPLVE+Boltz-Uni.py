@@ -1,4 +1,4 @@
-#@title Ant Omni-directional SSLVE BoltzmannMix
+#@title Ant Omni-directional LVE BoltzmannMix
 import numpy as np
 import random
 import torch
