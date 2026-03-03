@@ -83,6 +83,13 @@ class BaseBetaVAE(nn.Module):
             return {}
         has_aux = len(self.aux_losses) > 0 and bin_ids is not None and bins is not None
 
+        # Move aux losses to device and collect their parameters
+        params = list(self.parameters())
+        for _, aux in self.aux_losses:
+            if isinstance(aux, nn.Module):
+                aux.to(device)
+                params.extend(aux.parameters())
+
         data = torch.tensor(np.array(dataset), dtype=torch.float32)
         n = len(data)
         if n == 0:
@@ -103,7 +110,7 @@ class BaseBetaVAE(nn.Module):
         val_loader = torch.utils.data.DataLoader(
             val_indices, batch_size=batch_size, shuffle=False, drop_last=True)
 
-        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        optimizer = torch.optim.Adam(params, lr=lr)
 
         history = {
             'train_total': [], 'train_recon': [], 'train_kl': [],
