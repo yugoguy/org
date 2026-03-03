@@ -281,3 +281,72 @@ class PlanarArmCollector:
             'angle_variance': angle_variance,
             'local_abs_dependency': local_abs_dependency,
         }
+
+
+
+class AntOmniCollector:
+    """
+    Collector for Ant-v4 omni-directional locomotion.
+    Runs episodes and returns final CoM (x, y), survival sum, and torque sum.
+
+    Args:
+        max_steps: max steps per episode
+        n_episodes: number of episodes to average
+        seed: random seed
+    """
+
+    def __init__(self, max_steps=1000, n_episodes=1, seed=None):
+        self.max_steps = max_steps
+        self.n_episodes = n_episodes
+        self.seed = seed
+
+    def collect(self, agent):
+        """
+        Run agent in Ant-v4 and collect omni-directional info.
+
+        Returns:
+            dict with keys:
+                'final_xy': tuple (x, y) of final CoM position (mean over episodes)
+                'survival_sum': float, mean total survival bonus across episodes
+                'torque_sum': float, mean total control cost across episodes
+                'steps': float, mean steps survived across episodes
+        """
+        final_xs = []
+        final_ys = []
+        survival_sums = []
+        torque_sums = []
+        steps_list = []
+
+        for ep in range(self.n_episodes):
+            env = gym.make('Ant-v4', ctrl_cost_weight=0.5, healthy_reward=1.0,
+                           terminate_when_unhealthy=True, max_episode_steps=self.max_steps)
+            seed = self.seed + ep if self.seed is not None else None
+            obs, _ = env.reset(seed=seed)
+            survival_total = 0.0
+            torque_total = 0.0
+            n_steps = 0
+
+            for _ in range(self.max_steps):
+                action = agent.act(obs)
+                obs, reward, terminated, truncated, step_info = env.step(action)
+                survival_total += step_info.get('reward_survive', 1.0)
+                torque_total += step_info.get('reward_ctrl', 0.0)
+                n_steps += 1
+                if terminated or truncated:
+                    break
+
+            xy = env.unwrapped.get_body_com("torso")[:2]
+            final_xs.append(float(xy[0]))
+            final_ys.append(float(xy[1]))
+            survival_sums.append(survival_total)
+            torque_sums.append(abs(torque_total))
+            steps_list.append(n_steps)
+            env.close()
+
+        return {
+            'final_xy': (float(np.mean(final_xs)), float(np.mean(final_ys))),
+            'survival_sum': float(np.mean(survival_sums)),
+            'torque_sum': float(np.mean(torque_sums)),
+            'steps': float(np.mean(steps_list)),
+        }
+
