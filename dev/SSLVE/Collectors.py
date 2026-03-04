@@ -273,13 +273,14 @@ class PlanarArmCollector:
         mean_ee = tuple(float(np.mean([ee[d] for ee in end_effectors]))
                         for d in range(self.end_effector_dim))
 
-        angle_variance, local_abs_dependency = self._compute_metrics(angles)
+        angle_variance, local_abs_dependency, sine_dependency = self._compute_metrics(angles)
 
         return {
             'joint_angles': angles,
             'end_effector': mean_ee,
             'angle_variance': angle_variance,
             'local_abs_dependency': local_abs_dependency,
+            'sine_dependency': sine_dependency,
         }
 
 
