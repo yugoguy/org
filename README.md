@@ -48,7 +48,7 @@ flowchart LR
     START --> SP
     SP -->|"agent"| CO
     CO -->|"θ, info"| BM
-    BM -.->|"dataset, bins_idx"| SP
+    BM -.->|"self (dataset, bins_idx, ...)"| SP
 
     style SP fill:#fdf0ef,stroke:#c0392b,color:#000
     style CO fill:#eef5fb,stroke:#2471a3,color:#000
@@ -101,8 +101,8 @@ flowchart LR
     SP -->|"agent"| CO
     CO -->|"θ, info"| BM
     BM -->|"dataset, bin_ids, bins_idx"| LM
-    LM -.->|"encode, decode"| SP
-    BM -.->|"dataset, bins_idx"| SP
+    LM -.->|"self (encode, decode, ...)"| SP
+    BM -.->|"self (dataset, bins_idx, ...)"| SP
 
     style SP fill:#fdf0ef,stroke:#c0392b,color:#000
     style CO fill:#eef5fb,stroke:#2471a3,color:#000
@@ -176,6 +176,10 @@ flowchart TD
 | `bin_ids` | `List[bin_id]` |
 | `bins_idx` | `dict{bin_id → [indices]}` |
 | `fitnesses` | `List[float]` |
+| `compute_rewards` | `bool` *(optional, default False)* |
+| `rewards` | `List[float]` or `None` *(optional)* |
+
+> When `compute_rewards` is True, `update()` populates `rewards` with a per-candidate scalar (e.g. 0.0 if not inserted, 1/(rank+1) if inserted). Recommended to support reward-based dynamic variation operator mixing in SP.
 
 ### LatentModule (LM)
 
@@ -211,6 +215,7 @@ flowchart TD
 | `describe` | `(info)` | `descriptor` |
 | `discretize` | `(descriptor)` | `bin_id` |
 | `total_bins` | `()` | `int` |
+| `bin_value` | `(bin_id)` | `np.array` *(recommended)* |
 
 ---
 
@@ -257,3 +262,14 @@ Must expose `dataset`, `bin_ids`, `bins_idx`, `fitnesses`, `bins` for SP and LM 
 | 1 | New **AuxLoss (AL)** | `compute(**context) → scalar tensor` |
 
 Set `self.name` for logging. Picks needed keys from the context dict provided by the base model. Pass to `BaseBetaVAE` as `aux_losses=[(weight, aux)]`.
+
+> If the auxiliary loss depends on behavior (e.g. bin center values), the BD should implement `bin_value(bin_id)`.
+
+### ⑥ Reward-based dynamic operator mixing in SP
+
+| # | What to implement | Key methods |
+|---|---|---|
+| 1 | **BM** with reward accounting | `update()` populates `self.rewards` when `self.compute_rewards` is True |
+| 2 | **SP** with adaptive mixing | `sample()` reads `bm.rewards` to adjust operator allocation |
+
+SP sets `bm.compute_rewards = True` when ready, then reads `bm.rewards` after each `update()` to adapt the variation operator mix.
