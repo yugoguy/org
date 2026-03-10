@@ -1,4 +1,4 @@
-#@title GenPlanarArmCVT SSLVE BoltzmannMix
+#@title GenPlanarArmCVT SSLVE BoltzmannMix Flow
 import numpy as np
 import random
 import torch
