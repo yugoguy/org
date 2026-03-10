@@ -1,4 +1,3 @@
-
 from abc import ABC, abstractmethod
 import numpy as np
 import torch
@@ -124,5 +123,26 @@ class UniBinUniMemLVECross(VariationOperator):
             mu_b = latent_module.encode(xb)
             alpha = torch.rand(n, 1, device=device)
             z = alpha * mu_a + (1 - alpha) * mu_b
+            decoded = latent_module.decode(z)
+        return [d.cpu().numpy() for d in decoded]
+
+
+class StandardNormalSupportLVE(VariationOperator):
+    """Sample z uniformly in [lo, hi] per dimension, then decode."""
+
+    def __init__(self, lo=-2.0, hi=2.0):
+        super().__init__()
+        self.name = "std_support_lve"
+        self.lo = lo
+        self.hi = hi
+
+    def __call__(self, bm, n, latent_module=None):
+        if latent_module is None or n == 0:
+            return []
+        device = next(latent_module.parameters()).device
+        latent_dim = latent_module.latent_dim
+        latent_module.eval()
+        with torch.no_grad():
+            z = torch.rand(n, latent_dim, device=device) * (self.hi - self.lo) + self.lo
             decoded = latent_module.decode(z)
         return [d.cpu().numpy() for d in decoded]
