@@ -128,13 +128,21 @@ class UniBinUniMemLVECross(VariationOperator):
 
 
 class StandardNormalSupportLVE(VariationOperator):
-    """Sample z uniformly in [lo, hi] per dimension, then decode."""
+    """Sample z uniformly in [lo, hi] per dimension, then translate to x.
+    Uses translate_fn if provided, otherwise latent_module.decode.
 
-    def __init__(self, lo=-2.0, hi=2.0):
+    Args:
+        lo: lower bound per latent dimension
+        hi: upper bound per latent dimension
+        translate_fn: callable(z_tensor) -> x_tensor, or None
+    """
+
+    def __init__(self, lo=-2.0, hi=2.0, translate_fn=None):
         super().__init__()
         self.name = "std_support_lve"
         self.lo = lo
         self.hi = hi
+        self.translate_fn = translate_fn
 
     def __call__(self, bm, n, latent_module=None):
         if latent_module is None or n == 0:
@@ -142,7 +150,8 @@ class StandardNormalSupportLVE(VariationOperator):
         device = next(latent_module.parameters()).device
         latent_dim = latent_module.latent_dim
         latent_module.eval()
+        translate = self.translate_fn if self.translate_fn is not None else latent_module.decode
         with torch.no_grad():
             z = torch.rand(n, latent_dim, device=device) * (self.hi - self.lo) + self.lo
-            decoded = latent_module.decode(z)
+            decoded = translate(z)
         return [d.cpu().numpy() for d in decoded]
