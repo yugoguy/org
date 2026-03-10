@@ -23,7 +23,11 @@ flowchart LR
     subgraph SP["SearchPhase (SP)"]
         direction TB
         sample["sample(behavior_matching)"]
-        sample -->|"θ"| make_agent["make_agent(θ)"]
+        subgraph VOs1["VariationOperators (VO)"]
+            vo1["vo(bm, n)"]
+        end
+        sample --> VOs1
+        VOs1 -->|"θ"| make_agent["make_agent(θ)"]
         subgraph AG1["Agent (AG)"]
             agent1["agent"]
         end
@@ -55,6 +59,7 @@ flowchart LR
     style BM fill:#f5eefb,stroke:#7d3c98,color:#000
     style BD fill:#fdf0f8,stroke:#b03070,color:#000
     style AG1 fill:#fdf8ef,stroke:#b8860b,color:#000
+    style VOs1 fill:#fde8e5,stroke:#e74c3c,color:#000
 ```
 
 ---
@@ -68,7 +73,11 @@ flowchart LR
     subgraph SP["SearchPhase (SP)"]
         direction TB
         sample["sample(latent_module, collector, behavior_matching)"]
-        sample -->|"θ"| make_agent["make_agent(θ)"]
+        subgraph VOs2["VariationOperators (VO)"]
+            vo2["vo(bm, n, latent_module)"]
+        end
+        sample --> VOs2
+        VOs2 -->|"θ"| make_agent["make_agent(θ)"]
         subgraph AG2["Agent (AG)"]
             agent2["agent"]
         end
@@ -110,6 +119,7 @@ flowchart LR
     style BD2 fill:#fdf0f8,stroke:#b03070,color:#000
     style LM fill:#eefbf2,stroke:#1e8449,color:#000
     style AG2 fill:#fdf8ef,stroke:#b8860b,color:#000
+    style VOs2 fill:#fde8e5,stroke:#e74c3c,color:#000
     style AL1 fill:#eefbf2,stroke:#1e8449,color:#000
     style AL2 fill:#eefbf2,stroke:#1e8449,color:#000
     style ALn fill:#eefbf2,stroke:#1e8449,color:#000
@@ -128,6 +138,7 @@ flowchart TD
     ORCH --> LM["LatentModule (LM)"]
 
     SP --> AG["Agent (AG)"]
+    SP --> VO["VariationOperator (VO)"]
     BM --> BD["BehaviorDescriptor (BD)"]
     LM --> AL["AuxLoss (AL)"]
 
@@ -137,6 +148,7 @@ flowchart TD
     style BM fill:#f5eefb,stroke:#7d3c98,color:#000
     style LM fill:#eefbf2,stroke:#1e8449,color:#000
     style AG fill:#fdf8ef,stroke:#b8860b,color:#000
+    style VO fill:#fde8e5,stroke:#e74c3c,color:#000
     style BD fill:#fdf0f8,stroke:#b03070,color:#000
     style AL fill:#eefbf2,stroke:#1e8449,color:#000
 ```
@@ -152,7 +164,15 @@ flowchart TD
 | `sample` | `(**kwargs)` | `List[np.array]` — candidate θ vectors |
 | `make_agent` | `(θ)` | `Agent` with weights set |
 
-> Receives `latent_module`, `collector`, `behavior_matching` as kwargs. Uses or ignores depending on variant.
+> Receives `latent_module`, `collector`, `behavior_matching` as kwargs. Uses or ignores depending on variant. SP delegates candidate generation to one or more `VariationOperator` instances.
+
+### VariationOperator (VO) — supporting, inside SP
+
+| Method | Signature | Returns |
+|---|---|---|
+| `__call__` | `(bm, n, latent_module=None)` | `List[np.array]` — n candidate θ vectors |
+
+> Each VO has a `name` attribute used for reward tracking and logging. A VO selects parents from the archive (`bm`) and applies its variation strategy. PSE operators ignore `latent_module`; LVE operators require it. SP handles allocation across VOs (e.g. Boltzmann softmax) and fallback when archive is empty.
 
 ### Collector (CO)
 
@@ -189,8 +209,11 @@ flowchart TD
 | `encode` | `(x)` | `z` |
 | `encode_dist` | `(x)` | `(μ, logvar)` |
 | `decode` | `(z)` | `x̂` |
+| `translate` | `(z)` | `x̂` *(optional, defaults to decode)* |
 
-> `BaseBetaVAE` accepts `aux_losses=[(weight, AuxLoss), ...]` at construction. During `fit`, the base model builds a context dict and calls each auxiliary loss. `BetaVAE_SSLVE` is a legacy standalone implementation with built-in SSL loss.
+> `BaseBetaVAE` accepts `aux_losses=[(weight, AuxLoss), ...]` at construction. During `fit`, the base model builds a context dict and calls each auxiliary loss.
+
+> `translate(z)` maps from base/prior space to output. For standard VAE, identical to `decode`. For flow prior VAE, applies `flow.f_inv(z)` before `decode`. Used by operators that generate z from scratch (not from archive).
 
 ### AuxLoss (AL) — supporting, inside LM
 
@@ -237,9 +260,19 @@ SP, BM, LM remain unchanged.
 |---|---|---|
 | 1 | New **SearchPhase (SP)** | `sample(**kwargs)`, `make_agent(θ)` |
 
-Must accept `latent_module`, `collector`, `behavior_matching` as kwargs (use or ignore). All other components unchanged.
+Must accept `latent_module`, `collector`, `behavior_matching` as kwargs (use or ignore). All other components unchanged. Can use existing VOs or define new ones.
 
-### ③ Different behavior definition (same task)
+### ③ New variation operator
+
+| # | What to implement | Key methods |
+|---|---|---|
+| 1 | New **VariationOperator (VO)** | `__call__(bm, n, latent_module=None) → List[np.array]` |
+
+Set `self.name` for logging and reward tracking. Implement parent selection internally. PSE operators ignore `latent_module`; LVE operators use it for encode/decode. Pass to SP constructor as part of `operators` list.
+
+> If the operator generates z from scratch (not from archive parents), accept an optional `translate_fn` at construction. Use `translate_fn(z)` if provided, otherwise `latent_module.decode(z)`. This supports LMs with non-trivial prior-to-output mappings (e.g. flow prior VAE).
+
+### ④ Different behavior definition (same task)
 
 | # | What to implement | Key methods |
 |---|---|---|
@@ -247,7 +280,7 @@ Must accept `latent_module`, `collector`, `behavior_matching` as kwargs (use or 
 
 Same Collector (same info dict), just different BD extraction/discretization. Pass to BM constructor.
 
-### ④ Different behavior matching / binning
+### ⑤ Different behavior matching / binning
 
 | # | What to implement | Key methods |
 |---|---|---|
@@ -255,7 +288,7 @@ Same Collector (same info dict), just different BD extraction/discretization. Pa
 
 Must expose `dataset`, `bin_ids`, `bins_idx`, `fitnesses`, `bins` for SP and LM to read. Contains a BD instance.
 
-### ⑤ New auxiliary loss for latent module
+### ⑥ New auxiliary loss for latent module
 
 | # | What to implement | Key methods |
 |---|---|---|
@@ -265,7 +298,15 @@ Set `self.name` for logging. Picks needed keys from the context dict provided by
 
 > If the auxiliary loss depends on behavior (e.g. bin center values), the BD should implement `bin_value(bin_id)`.
 
-### ⑥ Reward-based dynamic operator mixing in SP
+### ⑦ New latent module variant
+
+| # | What to implement | Key methods |
+|---|---|---|
+| 1 | New **LatentModule (LM)** | `fit()`, `encode()`, `encode_dist()`, `decode()` |
+
+Must expose `latent_dim`, `skip_training`, and be an `nn.Module`. Can inherit from `BaseBetaVAE` and override `loss()` (e.g. flow prior KL). If the LM has a non-trivial prior-to-output mapping, implement `translate(z)` and pass it to operators that generate z from scratch.
+
+### ⑧ Reward-based dynamic operator mixing in SP
 
 | # | What to implement | Key methods |
 |---|---|---|
