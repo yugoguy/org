@@ -21,37 +21,37 @@ TOP_K = 3  #@param {type:"integer"}
 USE_PSE_MUT = True  #@param {type:"boolean"}
 USE_PSE_LINE = True  #@param {type:"boolean"}
 USE_LVE_MUT = True  #@param {type:"boolean"}
-USE_LVE_CROSS = False  #@param {type:"boolean"}
-USE_STD_SUPPORT_LVE = False  #@param {type:"boolean"}
+USE_LVE_CROSS = True  #@param {type:"boolean"}
+USE_STD_SUPPORT_LVE = True  #@param {type:"boolean"}
 
 PSE_MUT_SIGMA = 0.3  #@param {type:"number"}
-LVE_MUT_SIGMA = 0.3  #@param {type:"number"}
+LVE_MUT_SIGMA = 0.05  #@param {type:"number"}
 STD_SUPPORT_LO = -2.0  #@param {type:"number"}
 STD_SUPPORT_HI = 2.0  #@param {type:"number"}
 
 # --- Warmup Operators ---
 WARMUP_PSE_MUT = True  #@param {type:"boolean"}
-WARMUP_PSE_LINE = False  #@param {type:"boolean"}
+WARMUP_PSE_LINE = True  #@param {type:"boolean"}
 
 N_TOTAL = 200  #@param {type:"integer"}
 WARMUP_THRESHOLD = 512  #@param {type:"integer"}
 EMA_ALPHA = 0.3  #@param {type:"number"}
-TEMPERATURE = 1.0  #@param {type:"number"}
+TEMPERATURE = 0.5  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
 
 # --- Latent Module ---
-LATENT_DIM = 32  #@param {type:"integer"}
-HIDDEN_DIMS = [64]  #@param
+LATENT_DIM = 10  #@param {type:"integer"}
+HIDDEN_DIMS = [32]  #@param
 BETA = 1e-3  #@param {type:"number"}
 EPOCHS = 100  #@param {type:"integer"}
-BATCH_SIZE = 256  #@param {type:"integer"}
+BATCH_SIZE = 512  #@param {type:"integer"}
 LR = 1e-3  #@param {type:"number"}
 
 # --- Aux Losses ---
 USE_BIN_PRED = False  #@param {type:"boolean"}
-GAMMA_BIN_PRED = 1e-2  #@param {type:"number"}
+GAMMA_BIN_PRED = 1e-3  #@param {type:"number"}
 
-N_STEPS = 100  #@param {type:"integer"}
+N_STEPS = 500  #@param {type:"integer"}
 
 SEED = 42  #@param {type:"integer"}
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
