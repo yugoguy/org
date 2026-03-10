@@ -11,7 +11,7 @@ OUTPUT_ACTIVATION = 'tanh'  #@param {type:"string"}
 
 MAX_STEPS = 500  #@param {type:"integer"}
 N_EPISODES = 2  #@param {type:"integer"}
-CTRL_COST_WEIGHT = 0.5  #@param {type:"number"}
+CTRL_COST_WEIGHT = 0.1  #@param {type:"number"}
 
 BIN_RANGES = [(-100.0, 100.0), (-100.0, 100.0)]  #@param
 BIN_SIZES = [100, 100]  #@param
