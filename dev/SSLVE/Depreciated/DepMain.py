@@ -1,3 +1,7 @@
+import matplotlib.pyplot as plt
+
+
+
 class MAPElite:
     """
     MAP-Elites without latent module.
