@@ -22,8 +22,8 @@ TOP_K = 3  #@param {type:"integer"}
 USE_PSE_MUT = True  #@param {type:"boolean"}
 USE_PSE_LINE = True  #@param {type:"boolean"}
 USE_LVE_MUT = True  #@param {type:"boolean"}
-USE_LVE_CROSS = False  #@param {type:"boolean"}
-USE_STD_SUPPORT_LVE = False  #@param {type:"boolean"}
+USE_LVE_CROSS = True  #@param {type:"boolean"}
+USE_STD_SUPPORT_LVE = True  #@param {type:"boolean"}
 
 PSE_MUT_SIGMA = 0.01  #@param {type:"number"}
 LVE_MUT_SIGMA = 0.05  #@param {type:"number"}
@@ -32,12 +32,12 @@ STD_SUPPORT_HI = 2.0  #@param {type:"number"}
 
 # --- Warmup Operators ---
 WARMUP_PSE_MUT = True  #@param {type:"boolean"}
-WARMUP_PSE_LINE = False  #@param {type:"boolean"}
+WARMUP_PSE_LINE = True  #@param {type:"boolean"}
 
 N_TOTAL = 500  #@param {type:"integer"}
-WARMUP_THRESHOLD = 512  #@param {type:"integer"}
+WARMUP_THRESHOLD = 1000  #@param {type:"integer"}
 EMA_ALPHA = 0.3  #@param {type:"number"}
-TEMPERATURE = 1.0  #@param {type:"number"}
+TEMPERATURE = 0.5  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
 
 # --- Latent Module ---
@@ -50,7 +50,7 @@ LR = 1e-3  #@param {type:"number"}
 
 # --- Aux Losses ---
 USE_BIN_PRED = False  #@param {type:"boolean"}
-GAMMA_BIN_PRED = 1e-2  #@param {type:"number"}
+GAMMA_BIN_PRED = 1e-3  #@param {type:"number"}
 
 N_STEPS = 1000  #@param {type:"integer"}
 
