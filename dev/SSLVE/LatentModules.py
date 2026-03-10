@@ -196,3 +196,117 @@ class BaseBetaVAE(nn.Module):
 
         self.eval()
         return history
+
+
+
+class RealNVPPrior(nn.Module):
+    """
+    RealNVP normalizing flow operating in latent space.
+    Used as a learned prior for FlowPriorVAE.
+
+    Args:
+        latent_dim: dimension of latent space (must be even)
+        num_flows: number of coupling layers
+        num_hidden: hidden layer size in scale/translate networks
+        num_hidden_layers: number of hidden layers in scale/translate networks
+    """
+
+    def __init__(self, latent_dim, num_flows=3, num_hidden=256, num_hidden_layers=2):
+        super().__init__()
+        assert latent_dim % 2 == 0, "latent_dim must be even for RealNVP"
+        self.latent_dim = latent_dim
+        self.half_dim = latent_dim // 2
+        self.num_flows = num_flows
+
+        def make_net(out_activation=None):
+            layers = [nn.Linear(self.half_dim, num_hidden), nn.LeakyReLU()]
+            for _ in range(num_hidden_layers):
+                layers.append(nn.Linear(num_hidden, num_hidden))
+                layers.append(nn.LeakyReLU())
+            layers.append(nn.Linear(num_hidden, self.half_dim))
+            if out_activation is not None:
+                layers.append(out_activation)
+            return nn.Sequential(*layers)
+
+        self.s_nets = nn.ModuleList([make_net(out_activation=nn.Tanh()) for _ in range(num_flows)])
+        self.t_nets = nn.ModuleList([make_net() for _ in range(num_flows)])
+
+    def _coupling(self, x, index, forward=True):
+        xa, xb = torch.chunk(x, 2, dim=1)
+        s = self.s_nets[index](xa)
+        t = self.t_nets[index](xa)
+        if forward:
+            yb = (xb - t) * torch.exp(-s)
+        else:
+            yb = torch.exp(s) * xb + t
+        return torch.cat((xa, yb), dim=1), s
+
+    def _permute(self, x):
+        return x.flip(1)
+
+    def f(self, x):
+        """Forward: encoder z space -> base Gaussian space."""
+        log_det_J = x.new_zeros(x.shape[0])
+        z = x
+        for i in range(self.num_flows):
+            z, s = self._coupling(z, i, forward=True)
+            z = self._permute(z)
+            log_det_J = log_det_J - s.sum(dim=1)
+        return z, log_det_J
+
+    def f_inv(self, z):
+        """Inverse: base Gaussian space -> encoder z space."""
+        x = z
+        for i in reversed(range(self.num_flows)):
+            x = self._permute(x)
+            x, _ = self._coupling(x, i, forward=False)
+        return x
+
+    def log_prob(self, x):
+        """Log probability of x under the flow prior."""
+        z, log_det_J = self.f(x)
+        log_p = -0.5 * (torch.log(torch.tensor(2.0 * np.pi)) + z ** 2)
+        return log_p.sum(dim=1) + log_det_J
+
+
+class BaseFlowVAE(BaseBetaVAE):
+    """
+    Beta-VAE with RealNVP flow prior.
+    Inherits encoder/decoder/fit from BaseBetaVAE, overrides loss with
+    flow-based KL.
+
+    Args:
+        input_dim: input dimension
+        latent_dim: latent space dimension (must be even)
+        hidden_dims: list of hidden layer sizes for encoder/decoder
+        beta: KL weight
+        num_flows: number of RealNVP coupling layers
+        flow_hidden: hidden size in flow networks
+        flow_hidden_layers: number of hidden layers in flow networks
+        aux_losses: list of (weight, AuxLoss) pairs, or None
+    """
+
+    def __init__(self, input_dim, latent_dim, hidden_dims=None, beta=1.0,
+                 num_flows=3, flow_hidden=256, flow_hidden_layers=2,
+                 aux_losses=None):
+        super().__init__(input_dim, latent_dim, hidden_dims, beta, aux_losses)
+        self.flow = RealNVPPrior(
+            latent_dim=latent_dim,
+            num_flows=num_flows,
+            num_hidden=flow_hidden,
+            num_hidden_layers=flow_hidden_layers,
+        )
+
+    def loss(self, x, x_recon, mu, logvar):
+        recon_loss = F.mse_loss(x_recon, x, reduction='mean')
+        # log q(z|x) - log p_flow(z)
+        z = self.reparameterize(mu, logvar)
+        log_q = -0.5 * (logvar + (z - mu) ** 2 / logvar.exp()).sum(dim=1).mean()
+        log_p = self.flow.log_prob(z).mean()
+        kl_loss = log_q - log_p
+        total = recon_loss + self.beta * kl_loss
+        return {'total': total, 'recon': recon_loss, 'kl': kl_loss}
+
+    def translate(self, z):
+        """Map from base Gaussian space through flow inverse then decode."""
+        return self.decode(self.flow.f_inv(z))
