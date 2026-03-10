@@ -8,20 +8,16 @@ import torch
 # =============================================================================
 ARCHITECTURE = [27, 64, 64, 8]  #@param
 OUTPUT_ACTIVATION = 'tanh'  #@param {type:"string"}
-
 MAX_STEPS = 500  #@param {type:"integer"}
 N_EPISODES = 2  #@param {type:"integer"}
-CTRL_COST_WEIGHT = 0.5  #@param {type:"number"}
-
+CTRL_COST_WEIGHT = 0.01  #@param {type:"number"}
 BIN_RANGES = [(-100.0, 100.0), (-100.0, 100.0)]  #@param
 BIN_SIZES = [100, 100]  #@param
-
 TOP_K = 3  #@param {type:"integer"}
 
 # --- Warmup Operators ---
 USE_PSE_MUT = True  #@param {type:"boolean"}
 USE_PSE_LINE = True  #@param {type:"boolean"}
-
 PSE_MUT_SIGMA = 0.01  #@param {type:"number"}
 
 N_TOTAL = 500  #@param {type:"integer"}
@@ -30,13 +26,12 @@ TEMPERATURE = 0.5  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
 
 # --- Checkpoint thresholds (archive sizes) ---
-CHECKPOINT_THRESHOLDS = [500, 1000, 2000, 5000]  #@param
+CHECKPOINT_THRESHOLDS = list(range(250, 10001, 250))  #@param
 
 N_STEPS = 5000  #@param {type:"integer"}
-SAVE_DIR = 'checkpoints/ant_omni_warmup/'  #@param {type:"string"}
+SAVE_DIR = './checkpoints/'  #@param {type:"string"}
 
 SEED = 42  #@param {type:"integer"}
-
 random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -71,7 +66,7 @@ sp = BoltzmannMix(
     agent_kwargs={'output_activation': OUTPUT_ACTIVATION},
     operators=operators,
     n_total=N_TOTAL,
-    warmup_threshold=999999,  # never transition, stay in warmup mode
+    warmup_threshold=999999,
     ema_alpha=EMA_ALPHA,
     temperature=TEMPERATURE,
     min_proportion=MIN_PROPORTION,
@@ -94,7 +89,7 @@ print(f"Ctrl cost weight: {CTRL_COST_WEIGHT}")
 print(f"Grid: {BIN_SIZES[0]}x{BIN_SIZES[1]}, Range: {BIN_RANGES}")
 print(f"Samples per step: {N_TOTAL}")
 print(f"Operators: {[op.name for op in operators]}")
-print(f"Checkpoint thresholds: {CHECKPOINT_THRESHOLDS}")
+print(f"Checkpoint thresholds: {CHECKPOINT_THRESHOLDS[0]}..{CHECKPOINT_THRESHOLDS[-1]} (step 250)")
 print()
 
 remaining_thresholds = sorted(CHECKPOINT_THRESHOLDS)
@@ -103,10 +98,9 @@ for t in range(N_STEPS):
     print(f"\n--- MAP-Elite Step {t+1}/{N_STEPS} ---")
     me.step()
 
-    # Check if we crossed a threshold
     while remaining_thresholds and bm.archive_size() >= remaining_thresholds[0]:
         thresh = remaining_thresholds.pop(0)
-        ckpt_path = f"{SAVE_DIR}archive_{thresh}/"
+        ckpt_path = f"{SAVE_DIR}archive_{bm.archive_size()}/"
         print(f"\n*** Checkpoint at archive size {bm.archive_size()} (threshold {thresh}) ***")
         save_checkpoint(ckpt_path, bm, me.history, sp=sp)
         print(f"    Saved to {ckpt_path}")
