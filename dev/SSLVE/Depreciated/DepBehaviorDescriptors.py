@@ -1,3 +1,8 @@
+from abc import ABC, abstractmethod
+import numpy as np
+
+
+
 class BehaviorDescriptor(ABC):
     """
     Abstract class for behavior descriptor.
