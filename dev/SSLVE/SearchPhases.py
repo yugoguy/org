@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 import bisect
 
 class SearchPhase(ABC):
@@ -51,29 +52,28 @@ class BoltzmannMix:
     Adaptive search phase using Boltzmann (softmax) exploration over
     arbitrary variation operators.
 
-    Warmup phase: uses warmup_operator (default: first operator) until
-    archive reaches warmup_threshold.
-    Adaptive phase: allocate n_total samples across operators using softmax
-    over EMA of per-operator mean reward.
+    Warmup phase: Boltzmann mixing over warmup_operators until archive
+    reaches warmup_threshold. EMA resets when transitioning to adaptive phase.
+    Adaptive phase: Boltzmann mixing over operators.
 
     Args:
         agent_class: class with architecture info
         architecture: architecture spec (list or int)
-        operators: list of VariationOperator instances
+        operators: list of VariationOperator instances (adaptive phase)
         n_total: total samples per step
         warmup_threshold: archive size before adaptive mixing starts
         ema_alpha: EMA decay rate for reward tracking
         temperature: softmax temperature (higher = more uniform)
         min_proportion: minimum fraction of n_total per operator
         init_fn: callable() -> numpy array, custom init (default: He-init)
-        warmup_operator: VariationOperator for warmup (default: operators[0])
+        warmup_operators: list of VariationOperator for warmup (default: operators)
         agent_kwargs: dict for agent constructor
     """
 
     def __init__(self, agent_class, architecture, operators,
                  n_total=200, warmup_threshold=512,
                  ema_alpha=0.3, temperature=1.0, min_proportion=0.05,
-                 init_fn=None, warmup_operator=None, agent_kwargs=None):
+                 init_fn=None, warmup_operators=None, agent_kwargs=None):
         self.agent_class = agent_class
         self.architecture = architecture
         self.agent_kwargs = agent_kwargs or {}
@@ -84,10 +84,10 @@ class BoltzmannMix:
         self.temperature = temperature
         self.min_proportion = min_proportion
         self.init_fn = init_fn
-        self.warmup_operator = warmup_operator or operators[0]
+        self.warmup_operators = warmup_operators or operators
 
-        n_ops = len(operators)
-        self.ema_rates = np.ones(n_ops)
+        self.ema_rates = np.ones(len(operators))
+        self.warmup_ema_rates = np.ones(len(self.warmup_operators))
         self.prev_tags = None
         self.warmed_up = False
 
@@ -119,8 +119,8 @@ class BoltzmannMix:
             return self.init_fn()
         return self._he_init()
 
-    def _softmax_allocation(self):
-        logits = self.ema_rates / self.temperature
+    def _softmax_allocation(self, ema_rates):
+        logits = ema_rates / self.temperature
         logits = logits - np.max(logits)
         exp_logits = np.exp(logits)
         probs = exp_logits / np.sum(exp_logits)
@@ -140,21 +140,26 @@ class BoltzmannMix:
 
         return counts
 
-    def _update_ema(self, rewards, tags):
-        op_names = [op.name for op in self.operators]
-        for i, name in enumerate(op_names):
-            op_rewards = [r for r, t in zip(rewards, tags) if t == name]
+    def _update_ema(self, rewards, tags, ema_rates, op_list):
+        for i, op in enumerate(op_list):
+            op_rewards = [r for r, t in zip(rewards, tags) if t == op.name]
             if len(op_rewards) > 0:
                 mean_reward = np.mean(op_rewards)
-                self.ema_rates[i] = (self.ema_alpha * mean_reward
-                                     + (1 - self.ema_alpha) * self.ema_rates[i])
+                ema_rates[i] = (self.ema_alpha * mean_reward
+                                + (1 - self.ema_alpha) * ema_rates[i])
 
-    def _record_allocation(self, counts):
-        self.allocation_history.append(tuple(counts))
+    def _record_allocation(self, counts, op_list):
+        main_counts = [0] * len(self.operators)
+        for op, c in zip(op_list, counts):
+            for j, main_op in enumerate(self.operators):
+                if op.name == main_op.name:
+                    main_counts[j] += c
+                    break
+        self.allocation_history.append(tuple(main_counts))
         self.ema_history.append(tuple(self.ema_rates.copy()))
         total = sum(counts)
         parts = [f"{op.name}: {c}/{total} ({c/total:.0%})"
-                 for op, c in zip(self.operators, counts)]
+                 for op, c in zip(op_list, counts)]
         print(f"  Operator ratio - {', '.join(parts)}")
 
     def sample(self, latent_module=None, behavior_matching=None, **kwargs):
@@ -162,7 +167,10 @@ class BoltzmannMix:
 
         # Process rewards from previous step
         if self.prev_tags is not None and bm is not None and bm.rewards is not None:
-            self._update_ema(bm.rewards, self.prev_tags)
+            if self.warmed_up:
+                self._update_ema(bm.rewards, self.prev_tags, self.ema_rates, self.operators)
+            else:
+                self._update_ema(bm.rewards, self.prev_tags, self.warmup_ema_rates, self.warmup_operators)
 
         # No archive: random init
         if bm is None or len(bm.bins) == 0:
@@ -171,33 +179,39 @@ class BoltzmannMix:
                 bm.compute_rewards = False
             if latent_module is not None:
                 latent_module.skip_training = True
-            self._record_allocation([self.n_total] + [0] * (len(self.operators) - 1))
+            self._record_allocation(
+                [self.n_total] + [0] * (len(self.warmup_operators) - 1),
+                self.warmup_operators)
             return [self._init() for _ in range(self.n_total)]
 
         # Warmup phase
         if not self.warmed_up:
             if bm.archive_size() >= self.warmup_threshold:
                 self.warmed_up = True
+                self.ema_rates = np.ones(len(self.operators))
                 bm.compute_rewards = True
                 if latent_module is not None:
                     latent_module.skip_training = False
             else:
-                bm.compute_rewards = False
+                bm.compute_rewards = True
                 if latent_module is not None:
                     latent_module.skip_training = True
-                candidates = self.warmup_operator(bm, self.n_total, latent_module)
-                tags = [self.warmup_operator.name] * len(candidates)
+                counts = self._softmax_allocation(self.warmup_ema_rates)
+                self._record_allocation(counts, self.warmup_operators)
+
+                candidates = []
+                tags = []
+                for op, c in zip(self.warmup_operators, counts):
+                    children = op(bm, c, latent_module)
+                    candidates.extend(children)
+                    tags.extend([op.name] * len(children))
+
                 self.prev_tags = tags
-                counts = [0] * len(self.operators)
-                wi = next((i for i, op in enumerate(self.operators)
-                           if op is self.warmup_operator), 0)
-                counts[wi] = self.n_total
-                self._record_allocation(counts)
                 return candidates
 
         # Adaptive phase
-        counts = self._softmax_allocation()
-        self._record_allocation(counts)
+        counts = self._softmax_allocation(self.ema_rates)
+        self._record_allocation(counts, self.operators)
 
         candidates = []
         tags = []
