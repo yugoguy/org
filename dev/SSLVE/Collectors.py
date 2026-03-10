@@ -157,23 +157,25 @@ class PlanarArmCollector:
 
 class AntOmniCollector:
     """
-    Collector for Ant-v4 omni-directional locomotion.
+    Collector for Ant-v5 omni-directional locomotion.
     Runs episodes and returns final CoM (x, y), survival sum, and torque sum.
 
     Args:
         max_steps: max steps per episode
         n_episodes: number of episodes to average
+        ctrl_cost_weight: weight for control cost in env reward
         seed: random seed
     """
 
-    def __init__(self, max_steps=1000, n_episodes=1, seed=None):
+    def __init__(self, max_steps=1000, n_episodes=1, ctrl_cost_weight=0.5, seed=None):
         self.max_steps = max_steps
         self.n_episodes = n_episodes
+        self.ctrl_cost_weight = ctrl_cost_weight
         self.seed = seed
 
     def collect(self, agent):
         """
-        Run agent in Ant-v4 and collect omni-directional info.
+        Run agent in Ant-v5 and collect omni-directional info.
 
         Returns:
             dict with keys:
@@ -189,8 +191,12 @@ class AntOmniCollector:
         steps_list = []
 
         for ep in range(self.n_episodes):
-            env = gym.make('Ant-v4', ctrl_cost_weight=0.5, healthy_reward=1.0,
-                           terminate_when_unhealthy=True, max_episode_steps=self.max_steps)
+            env = gym.make('Ant-v5',
+                           ctrl_cost_weight=self.ctrl_cost_weight,
+                           healthy_reward=1.0,
+                           terminate_when_unhealthy=True,
+                           include_cfrc_ext_in_observation=False,
+                           max_episode_steps=self.max_steps)
             seed = self.seed + ep if self.seed is not None else None
             obs, _ = env.reset(seed=seed)
             survival_total = 0.0
