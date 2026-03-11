@@ -265,7 +265,7 @@ class RealNVPPrior(nn.Module):
     def log_prob(self, x):
         """Log probability of x under the flow prior."""
         z, log_det_J = self.f(x)
-        log_p = -0.5 * (torch.log(torch.tensor(2.0 * np.pi)) + z ** 2)
+        log_p = -0.5 * (np.log(2.0 * np.pi) + z ** 2)
         return log_p.sum(dim=1) + log_det_J
 
 
@@ -297,11 +297,11 @@ class BaseFlowVAE(BaseBetaVAE):
             num_hidden_layers=flow_hidden_layers,
         )
 
-    def loss(self, x, x_recon, mu, logvar):
+    def loss(self, x, x_recon, mu, logvar, z=None):
         recon_loss = F.mse_loss(x_recon, x, reduction='mean')
-        # log q(z|x) - log p_flow(z)
-        z = self.reparameterize(mu, logvar)
-        log_q = -0.5 * (logvar + (z - mu) ** 2 / logvar.exp()).sum(dim=1).mean()
+        if z is None:
+            z = self.reparameterize(mu, logvar)
+        log_q = -0.5 * (np.log(2.0 * np.pi) + logvar + (z - mu) ** 2 / logvar.exp()).sum(dim=1).mean()
         log_p = self.flow.log_prob(z).mean()
         kl_loss = log_q - log_p
         total = recon_loss + self.beta * kl_loss
@@ -310,3 +310,122 @@ class BaseFlowVAE(BaseBetaVAE):
     def translate(self, z):
         """Map from base Gaussian space through flow inverse then decode."""
         return self.decode(self.flow.f_inv(z))
+
+    def fit(self, dataset, bin_ids=None, bins=None, epochs=100, batch_size=32,
+            lr=1e-3, device='cpu', verbose=True, val_split=0.2):
+        self.to(device)
+        if self.skip_training:
+            return {}
+        has_aux = len(self.aux_losses) > 0 and bin_ids is not None and bins is not None
+
+        params = list(self.parameters())
+        for _, aux in self.aux_losses:
+            if isinstance(aux, nn.Module):
+                aux.to(device)
+                params.extend(aux.parameters())
+
+        data = torch.tensor(np.array(dataset), dtype=torch.float32)
+        n = len(data)
+        if n == 0:
+            return {}
+        batch_size = min(batch_size, n)
+
+        n_val = int(n * val_split)
+        if n - n_val < batch_size:
+            n_val = 0
+        n_train = n - n_val
+
+        indices = torch.randperm(n).tolist()
+        train_indices = indices[:n_train]
+        val_indices = indices[n_train:]
+
+        train_loader = torch.utils.data.DataLoader(
+            train_indices, batch_size=batch_size, shuffle=True, drop_last=True)
+        val_loader = torch.utils.data.DataLoader(
+            val_indices, batch_size=batch_size, shuffle=False, drop_last=True)
+
+        optimizer = torch.optim.Adam(params, lr=lr)
+
+        history = {
+            'train_total': [], 'train_recon': [], 'train_kl': [],
+            'val_total': [], 'val_recon': [], 'val_kl': []
+        }
+        if has_aux:
+            for _, aux in self.aux_losses:
+                history[f'train_{aux.name}'] = []
+
+        for epoch in range(epochs):
+            self.train()
+            epoch_losses = {'total': 0.0, 'recon': 0.0, 'kl': 0.0}
+            if has_aux:
+                for _, aux in self.aux_losses:
+                    epoch_losses[aux.name] = 0.0
+
+            for idx_batch in train_loader:
+                idx_batch = idx_batch.tolist()
+                batch = data[idx_batch].to(device)
+
+                optimizer.zero_grad()
+                x_recon, mu, logvar, z = self.forward(batch)
+                loss_dict = self.loss(batch, x_recon, mu, logvar, z=z)
+                total = loss_dict['total']
+
+                if has_aux:
+                    context = {
+                        'x': batch,
+                        'x_recon': x_recon,
+                        'mu': mu,
+                        'logvar': logvar,
+                        'z': z,
+                        'batch_indices': idx_batch,
+                        'bin_ids_batch': [bin_ids[i] for i in idx_batch],
+                        'bins': bins,
+                        'dataset': data,
+                        'model': self,
+                    }
+                    for weight, aux in self.aux_losses:
+                        aux_val = aux.compute(**context)
+                        total = total + weight * aux_val
+                        epoch_losses[aux.name] += aux_val.item()
+
+                total.backward()
+                optimizer.step()
+
+                epoch_losses['total'] += loss_dict['total'].item()
+                epoch_losses['recon'] += loss_dict['recon'].item()
+                epoch_losses['kl'] += loss_dict['kl'].item()
+
+            n_batches = len(train_loader)
+            for k in epoch_losses:
+                history[f'train_{k}'].append(epoch_losses[k] / n_batches)
+
+            self.eval()
+            val_losses = {'total': 0.0, 'recon': 0.0, 'kl': 0.0}
+            with torch.no_grad():
+                for idx_batch in val_loader:
+                    idx_batch = idx_batch.tolist()
+                    batch = data[idx_batch].to(device)
+                    x_recon, mu, logvar, z = self.forward(batch)
+                    loss_dict = self.loss(batch, x_recon, mu, logvar, z=z)
+                    for k in val_losses:
+                        val_losses[k] += loss_dict[k].item()
+
+            n_val_batches = len(val_loader)
+            if n_val_batches > 0:
+                for k in val_losses:
+                    history[f'val_{k}'].append(val_losses[k] / n_val_batches)
+
+            if verbose and (epoch + 1) % 10 == 0:
+                msg = (f"Epoch {epoch+1}/{epochs} | "
+                       f"Train Total: {history['train_total'][-1]:.4f}, "
+                       f"Recon: {history['train_recon'][-1]:.4f}, "
+                       f"KL: {history['train_kl'][-1]:.4f}")
+                if has_aux:
+                    for _, aux in self.aux_losses:
+                        msg += f", {aux.name}: {history[f'train_{aux.name}'][-1]:.4f}"
+                if n_val_batches > 0:
+                    msg += f" | Val Total: {history['val_total'][-1]:.4f}"
+                print(msg)
+
+        self.eval()
+        return history
