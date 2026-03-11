@@ -6,6 +6,7 @@ from matplotlib.collections import PolyCollection
 from scipy.spatial import Voronoi
 
 
+
 def save_checkpoint(path, bm, history, sp=None, lm=None):
     """
     Save checkpoint.
@@ -24,8 +25,8 @@ def save_checkpoint(path, bm, history, sp=None, lm=None):
              bin_ids=np.array(bm.bin_ids, dtype=object))
     np.save(path + 'history.npy', history)
     if sp is not None:
-        np.save(path + 'allocation_history.npy', sp.allocation_history)
-        np.save(path + 'ema_history.npy', sp.ema_history)
+        np.save(path + 'allocation_history.npy', np.array(sp.allocation_history, dtype=object))
+        np.save(path + 'ema_history.npy', np.array(sp.ema_history, dtype=object))
     if lm is not None:
         torch.save(lm.state_dict(), path + 'lm.pt')
 
@@ -73,7 +74,6 @@ def load_checkpoint(path, bm, history_target, sp=None, lm=None, device='cpu'):
         lm_path = path + 'lm.pt'
         if os.path.exists(lm_path):
             lm.load_state_dict(torch.load(lm_path, map_location=device))
-
 
 
 def plot_grid_archive(bm, bd, vmin=-500, vmax=0, save_path=None, figsize=(8, 8), cmap='inferno_r'):
