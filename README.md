@@ -11,3 +11,6 @@ Assumes following enviornment:
 ```
 micromamba create --name comp0197-pt python=3.12 -y && micromamba activate comp0197-pt && pip install torch torchvision pillow --index-url https://download.pytorch.org/whl/cpu
 ```
+
+```
+```
