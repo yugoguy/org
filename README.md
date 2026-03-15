@@ -13,5 +13,17 @@ micromamba create --name comp0197-pt python=3.12 -y && micromamba activate comp0
 ```
 
 ```
-git clone -b Deep-Temporal-Uncertainty https://github.com/yugoguy/org.git
+micromamba activate comp0197-pt
+```
+
+```
+git clone -b Deep-Temporal-Uncertainty https://github.com/yugoguy/org.git adl_dev
+```
+
+To run dev_run code files:
+```
+cd adl_dev
+```
+```
+python [dev_run file name]
 ```
