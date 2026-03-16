@@ -4,28 +4,33 @@ Uncertainty-aware deep learning framework for sequential prediction, supporting 
 
 ## Architecture
 
-### Class Hierarchy
+```mermaid
+classDiagram
+    class OutputHead {
+        <<abstract>>
+        +forward(h) output
+        +loss(output, target) scalar
+    }
 
+    class BaseModel {
+        <<abstract>>
+        +output_head: OutputHead
+        +fit(train_loader, val_loader, epochs, lr)
+        +forward(x) output
+        +mc_forward(x, num_mc) list[output]
+        +extract_features(x)* hidden
+    }
+
+    class DeepEnsemble {
+        +members: list[BaseModel]
+        +fit(train_loader, val_loader, epochs, lr)
+        +forward(x) list[output]
+        +to(device)
+    }
+
+    BaseModel *-- OutputHead : has-a
+    DeepEnsemble o-- BaseModel : wraps N ×
 ```
-OutputHead                BaseModel                DeepEnsemble
-├── forward(h)            ├── fit()                └── wraps N × BaseModel
-└── loss(output, target)  ├── forward(x)
-                          ├── mc_forward(x, num_mc)
-                          └── extract_features(x)
-```
-
-### Components
-
-**OutputHead** — Abstract output head defining `forward(h)` and `loss(output, target)`. Each subclass encapsulates both the prediction format and its corresponding loss function.
-
-**BaseModel** — Abstract base for all backbone models. Provides:
-
-- `fit(train_loader, val_loader, epochs, lr)` — full training loop
-- `forward(x)` — extract features then pass through output head
-- `mc_forward(x, num_mc)` — MC Dropout inference (runs forward `num_mc` times with dropout enabled, returns list of outputs)
-- `extract_features(x)` — abstract, implemented by subclasses
-
-**DeepEnsemble** — Wraps N independently initialized BaseModel instances. `fit()` trains each member sequentially. `forward()` returns a list of outputs (one per member).
 
 ## Epistemic Uncertainty Methods
 
@@ -33,9 +38,40 @@ OutputHead                BaseModel                DeepEnsemble
 
 Each ensemble member is a full model with independent random initialization. Diversity in predictions arises from different initializations converging to different local optima. Epistemic uncertainty is captured by the variance across members.
 
+```mermaid
+flowchart LR
+    X[Input x] --> M1[Member 1\ninit 1]
+    X --> M2[Member 2\ninit 2]
+    X --> MN[Member N\ninit N]
+    M1 --> O1[Output 1]
+    M2 --> O2[Output 2]
+    MN --> ON[Output N]
+    O1 --> V[Variance → epistemic\nuncertainty]
+    O2 --> V
+    ON --> V
+```
+
 ### MC Dropout
 
 A single model with dropout > 0. At inference, `mc_forward` keeps dropout enabled and runs multiple stochastic forward passes. Variance across runs estimates epistemic uncertainty.
+
+```mermaid
+flowchart LR
+    X[Input x] --> R1[Run 1\nrandom mask]
+    X --> R2[Run 2\nrandom mask]
+    X --> RN[Run N\nrandom mask]
+    subgraph Model — dropout ON
+        R1
+        R2
+        RN
+    end
+    R1 --> O1[Output 1]
+    R2 --> O2[Output 2]
+    RN --> ON[Output N]
+    O1 --> V[Variance → epistemic\nuncertainty]
+    O2 --> V
+    ON --> V
+```
 
 ## File Structure
 
