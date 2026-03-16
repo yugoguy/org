@@ -128,7 +128,7 @@ class SplineFlowHead(OutputHead):
 
 
 class QuantileHead(OutputHead):
-    def __init__(self, in_features: int, out_features: int, quantiles: list[float] = [0.1, 0.5, 0.9]):
+    def __init__(self, in_features: int, out_features: int, quantiles: list[float] = [0.1, 0.25, 0.5, 0.75, 0.9]):
         super().__init__()
         self.quantiles = quantiles
         self.linear = nn.Linear(in_features, out_features * len(quantiles))
