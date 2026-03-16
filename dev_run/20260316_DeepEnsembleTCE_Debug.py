@@ -25,8 +25,10 @@ parser.add_argument('--debug', action='store_true')
 args = parser.parse_args()
 
 # --- Load data (select one client) ---
+import zipfile, io, urllib.request
 DATA_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/00321/LD2011_2014.txt.zip"
-df = pd.read_csv(DATA_URL, sep=";", index_col=0, parse_dates=True, decimal=",")
+with zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(DATA_URL).read())) as z:
+    df = pd.read_csv(z.open("LD2011_2014.txt"), sep=";", index_col=0, parse_dates=True, decimal=",")
 df = df.resample("1h").sum()
 values = torch.tensor(df.iloc[:, args.client_idx].values, dtype=torch.float32)
 if args.debug:
