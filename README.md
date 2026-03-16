@@ -81,7 +81,7 @@ yarl               1.23.0
 
 Gitclone
 ```
-git clone -b Deep-Temporal-Uncertainty https://github.com/yugoguy/org.git adl_dev
+rm -rf adl_dev && git clone -b Deep-Temporal-Uncertainty https://github.com/yugoguy/org.git adl_dev
 ```
 
 To run dev_run code files:
