@@ -158,7 +158,8 @@ class PlanarArmCollector:
 class AntOmniCollector:
     """
     Collector for Ant-v5 omni-directional locomotion.
-    Runs episodes and returns final CoM (x, y), survival sum, and torque sum.
+    Runs episodes and returns final CoM (x, y), survival sum, torque sum,
+    cumulative path length, and heading angle variance (curvature consistency).
 
     Args:
         max_steps: max steps per episode
@@ -174,21 +175,13 @@ class AntOmniCollector:
         self.seed = seed
 
     def collect(self, agent):
-        """
-        Run agent in Ant-v5 and collect omni-directional info.
-
-        Returns:
-            dict with keys:
-                'final_xy': tuple (x, y) of final CoM position (mean over episodes)
-                'survival_sum': float, mean total survival bonus across episodes
-                'torque_sum': float, mean total control cost across episodes
-                'steps': float, mean steps survived across episodes
-        """
         final_xs = []
         final_ys = []
         survival_sums = []
         torque_sums = []
         steps_list = []
+        path_lengths = []
+        heading_angle_vars = []
 
         for ep in range(self.n_episodes):
             env = gym.make('Ant-v5',
@@ -202,6 +195,9 @@ class AntOmniCollector:
             survival_total = 0.0
             torque_total = 0.0
             n_steps = 0
+            path_length = 0.0
+            prev_xy = env.unwrapped.get_body_com("torso")[:2].copy()
+            headings = []
 
             for _ in range(self.max_steps):
                 action = agent.act(obs)
@@ -209,15 +205,33 @@ class AntOmniCollector:
                 survival_total += step_info.get('reward_survive', 1.0)
                 torque_total += step_info.get('reward_ctrl', 0.0)
                 n_steps += 1
+
+                xy = env.unwrapped.get_body_com("torso")[:2]
+                delta = xy - prev_xy
+                dist = float(np.linalg.norm(delta))
+                path_length += dist
+                if dist > 1e-8:
+                    headings.append(np.arctan2(delta[1], delta[0]))
+                prev_xy = xy.copy()
+
                 if terminated or truncated:
                     break
 
-            xy = env.unwrapped.get_body_com("torso")[:2]
+            # Variance of turning angles (heading differences, wraparound-corrected)
+            if len(headings) >= 2:
+                headings = np.array(headings)
+                diffs = np.diff(headings)
+                diffs = (diffs + np.pi) % (2 * np.pi) - np.pi
+                heading_angle_vars.append(float(np.var(diffs)))
+            else:
+                heading_angle_vars.append(0.0)
+
             final_xs.append(float(xy[0]))
             final_ys.append(float(xy[1]))
             survival_sums.append(survival_total)
             torque_sums.append(abs(torque_total))
             steps_list.append(n_steps)
+            path_lengths.append(path_length)
             env.close()
 
         return {
@@ -225,5 +239,6 @@ class AntOmniCollector:
             'survival_sum': float(np.mean(survival_sums)),
             'torque_sum': float(np.mean(torque_sums)),
             'steps': float(np.mean(steps_list)),
+            'path_length': float(np.mean(path_lengths)),
+            'heading_angle_var': float(np.mean(heading_angle_vars)),
         }
-
