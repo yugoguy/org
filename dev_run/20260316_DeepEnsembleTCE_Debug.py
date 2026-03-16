@@ -24,6 +24,7 @@ parser.add_argument('--debug', action='store_true')
 args = parser.parse_args()
 
 # --- Load data (select one client) ---
+# https://huggingface.co/datasets/tulipa762/electricity_load_diagrams
 ds = load_dataset("tulipa762/electricity_load_diagrams", "uci", split="train")
 values = torch.tensor(ds[args.client_idx]["target"], dtype=torch.float32)
 if args.debug:
