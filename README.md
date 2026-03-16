@@ -86,8 +86,8 @@ rm -rf adl_dev && git clone -b Deep-Temporal-Uncertainty https://github.com/yugo
 
 To run dev_run code files:
 ```
-cd adl_dev
+cd adl_dev/dev_run
 ```
 ```
-python [dev_run file name]
+python [dev_run file name].py ---[args]
 ```
