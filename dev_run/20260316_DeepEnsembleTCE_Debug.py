@@ -36,6 +36,8 @@ if args.debug:
 
 # Normalize
 mean, std = values.mean(), values.std()
+if std < 1e-8:
+    raise ValueError(f"Client {args.client_idx} has near-zero std ({std:.2e}). Try a different --client_idx.")
 values = (values - mean) / std
 
 # --- Create sequences ---
@@ -63,7 +65,8 @@ ensemble = DeepEnsemble(
     in_channels=1,
     num_channels_list=args.channels,
     kernel_size=args.kernel_size,
-    output_head=DeterministicHead(in_features=args.channels[-1], out_features=args.horizon),
+    output_head_class=DeterministicHead,
+    output_head_kwargs=dict(in_features=args.channels[-1], out_features=args.horizon),
     dropout=args.dropout,
 )
 ensemble.to(device)
