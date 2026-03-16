@@ -16,11 +16,6 @@ micromamba create --name comp0197-pt python=3.12 -y && micromamba activate comp0
 micromamba activate comp0197-pt
 ```
 
-Additional library to load dataset
-```
-pip install datasets
-```
-
 ```
 Package            Version     Build
 ------------------ ----------- -----
@@ -33,7 +28,6 @@ attrs              25.4.0
 certifi            2026.2.25
 charset-normalizer 3.4.6
 click              8.3.1
-datasets           4.7.0
 dill               0.4.0
 filelock           3.20.0
 frozenlist         1.8.0
