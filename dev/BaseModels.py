@@ -81,8 +81,8 @@ class TemporalBlock(nn.Module):
 
 class TCN(BaseModel):
     def __init__(self, in_channels: int, num_channels_list: list[int], kernel_size: int,
-                 output_head: OutputHead, dropout: float = 0.0):
-        super().__init__(output_head)
+                 output_head_class: type, output_head_kwargs: dict, dropout: float = 0.0):
+        super().__init__(output_head_class(**output_head_kwargs))
         blocks = []
         for i, out_channels in enumerate(num_channels_list):
             dilation = 2 ** i
