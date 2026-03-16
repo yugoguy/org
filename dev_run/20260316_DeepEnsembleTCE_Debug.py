@@ -1,3 +1,4 @@
+# python 20260316_DeepEnsembleTCE_Debug.py ---batch_size 256 --epochs 20 ---lr 1e-3 --channels 64 64 64 --kernel_size 5 --num_members 3 ---debug
 import sys
 sys.path.append('../dev')
 
