@@ -1,3 +1,8 @@
+## If dataset downloaded to your directory where the git was cloned
+# python 20250316_CheckDataset_LD.py --data_path ../../LD2011_2014.txt
+## If not downloaded
+# python 20250316_CheckDataset_LD.py
+
 import argparse
 import pandas as pd
 
