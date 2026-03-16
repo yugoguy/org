@@ -1,4 +1,9 @@
-# python 20260316_DeepEnsembleTCE_Debug.py --batch_size 256 --epochs 20 --lr 1e-3 --channels 64 64 64 --kernel_size 5 --num_members 3 --debug
+## If you don't have dataset downloaded to your directory where git is cloned
+# python 20260316_DeepEnsembleTCE_Debug.py --batch_size 256 --epochs 20 --lr 1e-3 --debug
+## To download and to use the downloaded dataset
+# wget https://archive.ics.uci.edu/ml/machine-learning-databases/00321/LD2011_2014.txt.zip && unzip LD2011_2014.txt.zip
+# python 20260316_DeepEnsembleTCE_Debug.py --data_path ../data/LD2011_2014.txt --batch_size 256 --epochs 20 --lr 1e-3 --debug
+
 import sys
 sys.path.append('../dev')
 
@@ -17,18 +22,22 @@ parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--epochs', type=int, default=10)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--num_members', type=int, default=3)
-parser.add_argument('--channels', type=int, nargs='+', default=[32, 32])
-parser.add_argument('--kernel_size', type=int, default=3)
+parser.add_argument('--channels', type=int, nargs='+', default=[64, 64, 64])
+parser.add_argument('--kernel_size', type=int, default=5)
 parser.add_argument('--dropout', type=float, default=0.0)
 parser.add_argument('--client_idx', type=int, default=0)
+parser.add_argument('--data_path', type=str, default=None, help='Path to local LD2011_2014.txt')
 parser.add_argument('--debug', action='store_true')
 args = parser.parse_args()
 
 # --- Load data (select one client) ---
-import zipfile, io, urllib.request
-DATA_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/00321/LD2011_2014.txt.zip"
-with zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(DATA_URL).read())) as z:
-    df = pd.read_csv(z.open("LD2011_2014.txt"), sep=";", index_col=0, parse_dates=True, decimal=",")
+if args.data_path is not None:
+    df = pd.read_csv(args.data_path, sep=";", index_col=0, parse_dates=True, decimal=",")
+else:
+    import zipfile, io, urllib.request
+    DATA_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/00321/LD2011_2014.txt.zip"
+    with zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(DATA_URL).read())) as z:
+        df = pd.read_csv(z.open("LD2011_2014.txt"), sep=";", index_col=0, parse_dates=True, decimal=",")
 df = df.resample("1h").sum()
 values = torch.tensor(df.iloc[:, args.client_idx].values, dtype=torch.float32)
 if args.debug:
