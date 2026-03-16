@@ -2,7 +2,7 @@
 # python 20260316_DeepEnsembleTCE_Debug.py --batch_size 256 --epochs 20 --lr 1e-3 --debug
 ## To download and to use the downloaded dataset
 # wget https://archive.ics.uci.edu/ml/machine-learning-databases/00321/LD2011_2014.txt.zip && unzip LD2011_2014.txt.zip
-# python 20260316_DeepEnsembleTCE_Debug.py --data_path ../data/LD2011_2014.txt --batch_size 256 --epochs 20 --lr 1e-3 --debug
+# python 20260316_DeepEnsembleTCE_Debug.py --data_path ../../LD2011_2014.txt --batch_size 256 --epochs 20 --lr 1e-3 --debug
 
 import sys
 sys.path.append('../dev')
