@@ -110,24 +110,16 @@ class PlanarArmCollector:
             variance = float(np.var(angles_1d))
             local_dep = float(np.sum(np.abs(np.diff(angles_1d))))
             sine_dep = float(np.mean((angles_1d[:-1] - np.pi * np.sin(angles_1d[1:])) ** 2))
-            return variance, local_dep, sine_dep
+            cosine_dep = float(np.mean((angles_1d[:-1] - np.pi * np.cos(angles_1d[1:])) ** 2))
+            return variance, local_dep, sine_dep, cosine_dep
         else:
             variances = [float(np.var(angles[:, c])) for c in range(k)]
             local_deps = [float(np.sum(np.abs(np.diff(angles[:, c])))) for c in range(k)]
             sine_deps = [float(np.mean((angles[:-1, c] - np.pi * np.sin(angles[1:, c])) ** 2)) for c in range(k)]
-            return variances, local_deps, sine_deps
+            cosine_deps = [float(np.mean((angles[:-1, c] - np.pi * np.cos(angles[1:, c])) ** 2)) for c in range(k)]
+            return variances, local_deps, sine_deps, cosine_deps
 
     def collect(self, agent):
-        """
-        Compute FK from agent's joint angles, optionally with noise.
-
-        Returns:
-            dict with keys:
-                'joint_angles': numpy array of angles (original, no noise)
-                'end_effector': tuple (mean over episodes if noised)
-                'angle_variance': float (2D) or list of floats (>2D)
-                'local_abs_dependency': float (2D) or list of floats (>2D)
-        """
         angles = agent.angles
         n_ep = 1 if self.noise_sigma == 0.0 else self.n_episodes
 
@@ -143,7 +135,7 @@ class PlanarArmCollector:
         mean_ee = tuple(float(np.mean([ee[d] for ee in end_effectors]))
                         for d in range(self.end_effector_dim))
 
-        angle_variance, local_abs_dependency, sine_dependency = self._compute_metrics(angles)
+        angle_variance, local_abs_dependency, sine_dependency, cosine_dependency = self._compute_metrics(angles)
 
         return {
             'joint_angles': angles,
@@ -151,6 +143,7 @@ class PlanarArmCollector:
             'angle_variance': angle_variance,
             'local_abs_dependency': local_abs_dependency,
             'sine_dependency': sine_dependency,
+            'cosine_dependency': cosine_dependency,
         }
 
 
