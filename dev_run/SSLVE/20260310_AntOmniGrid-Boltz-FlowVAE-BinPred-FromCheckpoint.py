@@ -205,4 +205,4 @@ print(f"Best fitness: {f_min:.4f}")
 # Plot
 # =============================================================================
 sslve.plot_history()
-sp.plot_allocation()
+#sp.plot_allocation()
