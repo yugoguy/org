@@ -62,13 +62,9 @@ GAMMA_MIX_BIN_PRED = 1e-3  #@param {type:"number"}
 MIX_ALPHA_LO = -0.1  #@param {type:"number"}
 MIX_ALPHA_HI = 1.1  #@param {type:"number"}
 
-# --- Checkpoint thresholds (archive sizes) ---
-CHECKPOINT_THRESHOLDS = list(range(250, 10001, 250))  #@param
-
 N_STEPS = 5000  #@param {type:"integer"}
-SAVE_DIR = './checkpoints/'  #@param {type:"string"}
 
-# --- Checkpoint to load ---
+# --- Checkpoint ---
 CHECKPOINT_PATH = ''  #@param {type:"string"}
 
 SEED = 42  #@param {type:"integer"}
@@ -222,30 +218,16 @@ if USE_MIX_BIN_PRED:
 print(f"Mode: {'SSLVE' if USE_LVE else 'MAPElite'}")
 print()
 
-remaining_thresholds = sorted(CHECKPOINT_THRESHOLDS)
-
-for t in range(N_STEPS):
-    print(f"\n--- Step {t+1}/{N_STEPS} ---")
-    if USE_LVE:
-        orchestrator.step(train_kwargs={
-            'epochs': EPOCHS,
-            'batch_size': BATCH_SIZE,
-            'lr': LR,
-            'verbose': True,
-        })
-    else:
-        orchestrator.step()
-
-    while remaining_thresholds and bm.archive_size() >= remaining_thresholds[0]:
-        thresh = remaining_thresholds.pop(0)
-        ckpt_path = f"{SAVE_DIR}archive_{bm.archive_size()}/"
-        print(f"\n*** Checkpoint at archive size {bm.archive_size()} (threshold {thresh}) ***")
-        save_checkpoint(ckpt_path, bm, orchestrator.history, sp=sp, lm=lm)
-        print(f"    Saved to {ckpt_path}")
-
-    if not remaining_thresholds:
-        print("\nAll checkpoints saved. Stopping.")
-        break
+if USE_LVE:
+    train_kwargs = {
+        'epochs': EPOCHS,
+        'batch_size': BATCH_SIZE,
+        'lr': LR,
+        'verbose': True,
+    }
+    histories = orchestrator.run(n_steps=N_STEPS, train_kwargs=train_kwargs)
+else:
+    orchestrator.run(n_steps=N_STEPS)
 
 # =============================================================================
 # Results
