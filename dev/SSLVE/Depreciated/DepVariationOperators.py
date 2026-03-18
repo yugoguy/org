@@ -1,3 +1,38 @@
+from abc import ABC, abstractmethod
+import numpy as np
+import torch
+
+
+class VariationOperator(ABC):
+    """
+    Abstract variation operator for evolutionary search.
+
+    Each operator selects parents from the archive and produces
+    n child candidates via its variation strategy.
+
+    Args:
+        greedy_mem: if True, select best fitness member in chosen bin.
+                    if False (default), uniform random member.
+    """
+
+    def __init__(self, greedy_mem=False):
+        self.name = "operator"
+        self.greedy_mem = greedy_mem
+
+    @abstractmethod
+    def __call__(self, bm, n, latent_module=None):
+        pass
+
+    def _select_parent(self, bm):
+        """Uniform bin, then uniform or greedy member. Returns dataset index."""
+        bin_ids = list(bm.bins_idx.keys())
+        bid = bin_ids[np.random.randint(len(bin_ids))]
+        members = bm.bins_idx[bid]
+        if self.greedy_mem:
+            return min(members, key=lambda i: bm.fitnesses[i])
+        return members[np.random.randint(len(members))]
+
+
 class UniBinUniMemPSEMut(VariationOperator):
     """Gaussian mutation in parameter space."""
 
