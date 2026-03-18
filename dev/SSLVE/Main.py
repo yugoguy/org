@@ -78,11 +78,13 @@ class SSLVE:
         self.history['fitness_max'].append(f_max)
         self.history['coverage'].append(self.BM.coverage())
         self.history['archive_size'].append(self.BM.archive_size())
+        self.history['qd_score'].append(self.BM.qd_score())
 
         print(f"Archive: {self.BM.archive_size()}, "
               f"Bins: {len(self.BM.bins)}, "
               f"Coverage: {self.BM.coverage():.4f}, "
-              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}")
+              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}"
+              f"QD-score: {self.BM.qd_score():.4f}")
 
         # Train latent module
         lm_history = self.LM.fit(
@@ -212,11 +214,13 @@ class MAPElite:
         self.history['fitness_max'].append(f_max)
         self.history['coverage'].append(self.BM.coverage())
         self.history['archive_size'].append(self.BM.archive_size())
+        self.history['qd_score'].append(self.BM.qd_score())
 
         print(f"Archive: {self.BM.archive_size()}, "
               f"Bins: {len(self.BM.bins)}, "
               f"Coverage: {self.BM.coverage():.4f}, "
-              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}")
+              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}"
+              f"QD-score: {self.BM.qd_score():.4f}")
 
     def run(self, n_steps):
         """
