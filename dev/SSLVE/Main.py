@@ -27,6 +27,7 @@ class SSLVE:
             'fitness_max': [],
             'coverage': [],
             'archive_size': [],
+            'qd_score': [],
         }
 
     def step(self, train_kwargs=None):
@@ -83,8 +84,8 @@ class SSLVE:
         print(f"Archive: {self.BM.archive_size()}, "
               f"Bins: {len(self.BM.bins)}, "
               f"Coverage: {self.BM.coverage():.4f}, "
-              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}"
-              f"QD-score: {self.BM.qd_score():.4f}")
+              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}")
+        print(f"QD-score: {self.BM.qd_score():.4f}")
 
         # Train latent module
         lm_history = self.LM.fit(
@@ -115,16 +116,15 @@ class SSLVE:
         return histories
 
     def plot_history(self, save_path=None):
-        """Plot fitness and coverage over steps."""
+        """Plot fitness, coverage, archive size, and QD-score over steps."""
         if not self.history['fitness_min']:
             print("No history available.")
             return
 
         steps = range(len(self.history['fitness_min']))
-        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-        # Fitness
-        ax = axes[0]
+        ax = axes[0, 0]
         ax.plot(steps, self.history['fitness_min'], label='Min')
         ax.plot(steps, self.history['fitness_mean'], label='Mean')
         ax.plot(steps, self.history['fitness_max'], label='Max')
@@ -133,19 +133,23 @@ class SSLVE:
         ax.set_title('Fitness over Steps')
         ax.legend()
 
-        # Coverage
-        ax = axes[1]
+        ax = axes[0, 1]
         ax.plot(steps, self.history['coverage'])
         ax.set_xlabel('Step')
         ax.set_ylabel('Coverage')
         ax.set_title('Behavior Coverage')
 
-        # Archive size
-        ax = axes[2]
+        ax = axes[1, 0]
         ax.plot(steps, self.history['archive_size'])
         ax.set_xlabel('Step')
         ax.set_ylabel('Size')
         ax.set_title('Archive Size')
+
+        ax = axes[1, 1]
+        ax.plot(steps, self.history['qd_score'])
+        ax.set_xlabel('Step')
+        ax.set_ylabel('QD-score')
+        ax.set_title('QD-score')
 
         plt.tight_layout()
         if save_path:
@@ -178,6 +182,7 @@ class MAPElite:
             'fitness_max': [],
             'coverage': [],
             'archive_size': [],
+            'qd_score': [],
         }
 
     def step(self):
@@ -219,8 +224,8 @@ class MAPElite:
         print(f"Archive: {self.BM.archive_size()}, "
               f"Bins: {len(self.BM.bins)}, "
               f"Coverage: {self.BM.coverage():.4f}, "
-              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}"
-              f"QD-score: {self.BM.qd_score():.4f}")
+              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}")
+        print(f"QD-score: {self.BM.qd_score():.4f}")
 
     def run(self, n_steps):
         """
@@ -239,9 +244,9 @@ class MAPElite:
             return
 
         steps = range(len(self.history['fitness_min']))
-        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-        ax = axes[0]
+        ax = axes[0, 0]
         ax.plot(steps, self.history['fitness_min'], label='Min')
         ax.plot(steps, self.history['fitness_mean'], label='Mean')
         ax.plot(steps, self.history['fitness_max'], label='Max')
@@ -250,17 +255,23 @@ class MAPElite:
         ax.set_title('Fitness over Steps')
         ax.legend()
 
-        ax = axes[1]
+        ax = axes[0, 1]
         ax.plot(steps, self.history['coverage'])
         ax.set_xlabel('Step')
         ax.set_ylabel('Coverage')
         ax.set_title('Behavior Coverage')
 
-        ax = axes[2]
+        ax = axes[1, 0]
         ax.plot(steps, self.history['archive_size'])
         ax.set_xlabel('Step')
         ax.set_ylabel('Size')
         ax.set_title('Archive Size')
+
+        ax = axes[1, 1]
+        ax.plot(steps, self.history['qd_score'])
+        ax.set_xlabel('Step')
+        ax.set_ylabel('QD-score')
+        ax.set_title('QD-score')
 
         plt.tight_layout()
         if save_path:
