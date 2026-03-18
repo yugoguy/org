@@ -126,11 +126,19 @@ assert len(warmup_operators) > 0, "At least one warmup operator must be enabled.
 # --- Build latent module and aux losses (only if LVE used) ---
 lm = None
 if USE_LVE:
+    # --- Build aux losses ---
     aux_losses = []
     if USE_BIN_PRED:
         aux = BinPred(behavior_descriptor=bd, latent_dim=LATENT_DIM, output_dim=END_EFFECTOR_DIM)
         aux_losses.append((GAMMA_BIN_PRED, aux))
-
+    
+    if USE_MIX_BIN_PRED:
+        mix_aux = MixBinPred(
+            behavior_descriptor=bd, latent_dim=LATENT_DIM, output_dim=END_EFFECTOR_DIM,
+            alpha_lo=MIX_ALPHA_LO, alpha_hi=MIX_ALPHA_HI,
+        )
+        aux_losses.append((GAMMA_MIX_BIN_PRED, mix_aux))
+    
     if USE_FLOW_PRIOR:
         lm = BaseFlowVAE(
             input_dim=GENE_DIM,
@@ -140,27 +148,20 @@ if USE_LVE:
             num_flows=NUM_FLOWS,
             flow_hidden=FLOW_HIDDEN,
             flow_hidden_layers=FLOW_HIDDEN_LAYERS,
-            aux_losses=aux_losses if aux_losses else None,
+            aux_losses=aux_losses,
         )
         translate_fn = lm.translate
+        if USE_MIX_BIN_PRED:
+            mix_aux.to_base_fn = lambda z: lm.flow.f(z)[0]
+            mix_aux.from_base_fn = lm.flow.f_inv
     else:
         lm = BaseBetaVAE(
             input_dim=GENE_DIM,
             latent_dim=LATENT_DIM,
             hidden_dims=HIDDEN_DIMS,
             beta=BETA,
-            aux_losses=aux_losses if aux_losses else None,
+            aux_losses=aux_losses,
         )
-
-    if USE_MIX_BIN_PRED:
-        to_base_fn = (lambda z: lm.flow.f(z)[0]) if USE_FLOW_PRIOR else None
-        from_base_fn = lm.flow.f_inv if USE_FLOW_PRIOR else None
-        mix_aux = MixBinPred(
-            behavior_descriptor=bd, latent_dim=LATENT_DIM, output_dim=END_EFFECTOR_DIM,
-            alpha_lo=MIX_ALPHA_LO, alpha_hi=MIX_ALPHA_HI,
-            to_base_fn=to_base_fn, from_base_fn=from_base_fn,
-        )
-        aux_losses.append((GAMMA_MIX_BIN_PRED, mix_aux))
 
     if USE_STD_SUPPORT_LVE:
         operators.append(StandardNormalSupportLVE(lo=STD_SUPPORT_LO, hi=STD_SUPPORT_HI, translate_fn=translate_fn))
