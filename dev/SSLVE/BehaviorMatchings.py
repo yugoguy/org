@@ -59,12 +59,14 @@ class MAPElitesBM:
         behavior_descriptor: object with describe(info) and discretize(descriptor)
         fitness_fn: callable(info) -> float (to minimize)
         top_k: max entries per bin
+        max_fitness: reference maximum fitness for QD-score computation (default 0.0)
     """
 
-    def __init__(self, behavior_descriptor, fitness_fn, top_k=10):
+    def __init__(self, behavior_descriptor, fitness_fn, top_k=10, max_fitness=0.0):
         self.behavior_descriptor = behavior_descriptor
         self.fitness_fn = fitness_fn
         self.top_k = top_k
+        self.max_fitness = max_fitness
         self.bins = {}  # {bin_id: [(theta, fitness), ...]}
         self.dataset = []
         self.fitnesses = []
@@ -149,7 +151,7 @@ class MAPElitesBM:
         return float(f.min()), float(f.mean()), float(f.max())
 
     def qd_score(self):
-        """Negated sum of best (min) fitness per occupied bin. Higher is better."""
+        """Sum of (max_fitness - best_fitness) per occupied bin. Higher is better."""
         if not self.bins:
             return 0.0
-        return -sum(min(f for _, f in entries) for entries in self.bins.values())
+        return sum(self.max_fitness - min(f for _, f in entries) for entries in self.bins.values())
