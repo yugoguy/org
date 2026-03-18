@@ -3,45 +3,42 @@ import numpy as np
 import torch
 
 
+
 class VariationOperator(ABC):
     """
     Abstract variation operator for evolutionary search.
-    
+
     Each operator selects parents from the archive and produces
     n child candidates via its variation strategy.
+
+    Args:
+        greedy_mem: if True, select best fitness member in chosen bin.
+                    if False (default), uniform random member.
     """
 
-    def __init__(self):
+    def __init__(self, greedy_mem=False):
         self.name = "operator"
+        self.greedy_mem = greedy_mem
 
     @abstractmethod
     def __call__(self, bm, n, latent_module=None):
-        """
-        Generate n candidates.
-
-        Args:
-            bm: BehaviorMatching instance (archive)
-            n: number of candidates to produce
-            latent_module: LatentModule instance or None
-
-        Returns:
-            list of numpy arrays (candidate thetas)
-        """
         pass
 
     def _select_parent(self, bm):
-        """Uniform bin -> uniform member. Returns dataset index."""
+        """Uniform bin, then uniform or greedy member. Returns dataset index."""
         bin_ids = list(bm.bins_idx.keys())
         bid = bin_ids[np.random.randint(len(bin_ids))]
         members = bm.bins_idx[bid]
+        if self.greedy_mem:
+            return min(members, key=lambda i: bm.fitnesses[i])
         return members[np.random.randint(len(members))]
 
 
-class UniBinUniMemPSEMut(VariationOperator):
+class PSEMut(VariationOperator):
     """Gaussian mutation in parameter space."""
 
-    def __init__(self, sigma=0.3):
-        super().__init__()
+    def __init__(self, sigma=0.3, greedy_mem=False):
+        super().__init__(greedy_mem=greedy_mem)
         self.name = "pse_mut"
         self.sigma = sigma
 
@@ -55,11 +52,11 @@ class UniBinUniMemPSEMut(VariationOperator):
         return candidates
 
 
-class UniBinUniMemPSELine(VariationOperator):
+class PSELine(VariationOperator):
     """Line recombination: alpha * parent_a + (1-alpha) * parent_b."""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, greedy_mem=False):
+        super().__init__(greedy_mem=greedy_mem)
         self.name = "pse_line"
 
     def __call__(self, bm, n, latent_module=None):
@@ -75,11 +72,11 @@ class UniBinUniMemPSELine(VariationOperator):
         return candidates
 
 
-class UniBinUniMemLVEMut(VariationOperator):
+class LVEMut(VariationOperator):
     """Gaussian mutation in latent space: encode -> noise -> decode."""
 
-    def __init__(self, sigma=0.1):
-        super().__init__()
+    def __init__(self, sigma=0.1, greedy_mem=False):
+        super().__init__(greedy_mem=greedy_mem)
         self.name = "lve_mut"
         self.sigma = sigma
 
@@ -100,11 +97,11 @@ class UniBinUniMemLVEMut(VariationOperator):
         return [d.cpu().numpy() for d in decoded]
 
 
-class UniBinUniMemLVECross(VariationOperator):
+class LVECross(VariationOperator):
     """Crossover in latent space: encode two parents, interpolate, decode."""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, greedy_mem=False):
+        super().__init__(greedy_mem=greedy_mem)
         self.name = "lve_cross"
 
     def __call__(self, bm, n, latent_module=None):
@@ -125,6 +122,7 @@ class UniBinUniMemLVECross(VariationOperator):
             z = alpha * mu_a + (1 - alpha) * mu_b
             decoded = latent_module.decode(z)
         return [d.cpu().numpy() for d in decoded]
+
 
 
 class StandardNormalSupportLVE(VariationOperator):
