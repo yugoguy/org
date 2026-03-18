@@ -44,13 +44,13 @@ MIN_PROPORTION = 0.05  #@param {type:"number"}
 
 # --- Latent Module ---
 USE_FLOW_PRIOR = False  #@param {type:"boolean"}
-LATENT_DIM = 32  #@param {type:"integer"}
-HIDDEN_DIMS = [128]  #@param
+LATENT_DIM = 128  #@param {type:"integer"}
+HIDDEN_DIMS = [512, 256]  #@param
 BETA = 1e-2  #@param {type:"number"}
 NUM_FLOWS = 3  #@param {type:"integer"}
-FLOW_HIDDEN = 128  #@param {type:"integer"}
+FLOW_HIDDEN = 256  #@param {type:"integer"}
 FLOW_HIDDEN_LAYERS = 2  #@param {type:"integer"}
-EPOCHS = 100  #@param {type:"integer"}
+EPOCHS = 10  #@param {type:"integer"}
 BATCH_SIZE = 512  #@param {type:"integer"}
 LR = 1e-3  #@param {type:"number"}
 
