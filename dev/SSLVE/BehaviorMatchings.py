@@ -147,3 +147,9 @@ class MAPElitesBM:
             return 0.0, 0.0, 0.0
         f = np.array(self.fitnesses)
         return float(f.min()), float(f.mean()), float(f.max())
+
+    def qd_score(self):
+        """Negated sum of best (min) fitness per occupied bin. Higher is better."""
+        if not self.bins:
+            return 0.0
+        return -sum(min(f for _, f in entries) for entries in self.bins.values())
