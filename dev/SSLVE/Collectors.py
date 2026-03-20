@@ -322,9 +322,10 @@ class PointMassCollector:
             float(np.mean([xy[d] for xy in final_xys]))
             for d in range(2)
         )
+        normalized_xy = tuple(v / self.max_path_length for v in mean_xy)
 
         return {
-            'end_effector': mean_xy,
+            'end_effector': normalized_xy,
             'heading_angle_var': float(np.mean(heading_vars)),
             'path_length': float(np.mean(path_lengths)),
             'max_path_length': self.max_path_length,
