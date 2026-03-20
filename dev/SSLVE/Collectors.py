@@ -235,3 +235,97 @@ class AntOmniCollector:
             'path_length': float(np.mean(path_lengths)),
             'heading_angle_var': float(np.mean(heading_angle_vars)),
         }
+
+
+
+class PointMassCollector:
+    """
+    Collector for 2D point mass trajectory generation.
+
+    Dynamics:
+        vel = friction * vel + force
+        pos = pos + dt * vel
+
+    Agent input: (pos_x, pos_y, vel_x, vel_y, t/T)  — 5D
+    Agent output: (force_x, force_y) — 2D, tanh-bounded [-1, 1]
+
+    Reachable radius = n_steps * dt / (1 - friction).
+    Tune params so this equals desired radius (e.g. 1.0).
+
+    Args:
+        friction: velocity decay factor per step (0 < friction < 1)
+        dt: time step size
+        n_steps: number of simulation steps per episode
+        noise_sigma: std of Gaussian noise added to force per episode (0 = deterministic)
+        n_episodes: number of noised episodes to average (ignored if noise_sigma=0)
+    """
+
+    def __init__(self, friction=0.9, dt=0.01, n_steps=100,
+                 noise_sigma=0.0, n_episodes=1):
+        self.friction = friction
+        self.dt = dt
+        self.n_steps = n_steps
+        self.noise_sigma = noise_sigma
+        self.n_episodes = n_episodes
+        self.max_path_length = n_steps * dt / (1.0 - friction)
+
+    def _simulate(self, agent):
+        """Run one episode, return final_xy, heading_angle_var, path_length."""
+        pos = np.array([0.0, 0.0])
+        vel = np.array([0.0, 0.0])
+        T = self.n_steps
+
+        headings = []
+        path_length = 0.0
+
+        for t in range(1, T + 1):
+            obs = np.array([pos[0], pos[1], vel[0], vel[1], t / T])
+            force = agent.act(obs)
+
+            if self.noise_sigma > 0.0:
+                force = force + self.noise_sigma * np.random.randn(2)
+                force = np.clip(force, -1.0, 1.0)
+
+            vel = self.friction * vel + force
+            delta = self.dt * vel
+            pos = pos + delta
+
+            dist = np.linalg.norm(delta)
+            path_length += dist
+            if dist > 1e-8:
+                headings.append(np.arctan2(delta[1], delta[0]))
+
+        # Heading angle variance
+        if len(headings) >= 2:
+            diffs = np.diff(headings)
+            diffs = (diffs + np.pi) % (2 * np.pi) - np.pi
+            heading_angle_var = float(np.var(diffs))
+        else:
+            heading_angle_var = 0.0
+
+        return tuple(pos), heading_angle_var, path_length
+
+    def collect(self, agent):
+        n_ep = 1 if self.noise_sigma == 0.0 else self.n_episodes
+
+        final_xys = []
+        heading_vars = []
+        path_lengths = []
+
+        for _ in range(n_ep):
+            final_xy, hav, pl = self._simulate(agent)
+            final_xys.append(final_xy)
+            heading_vars.append(hav)
+            path_lengths.append(pl)
+
+        mean_xy = tuple(
+            float(np.mean([xy[d] for xy in final_xys]))
+            for d in range(2)
+        )
+
+        return {
+            'end_effector': mean_xy,
+            'heading_angle_var': float(np.mean(heading_vars)),
+            'path_length': float(np.mean(path_lengths)),
+            'max_path_length': self.max_path_length,
+        }
