@@ -6,7 +6,8 @@ import torch
 # =============================================================================
 # Hyperparameters
 # =============================================================================
-ARCHITECTURE = [5, 16, 16, 2]  #@param
+SPACE_DIM = 4  #@param {type:"integer"}
+HIDDEN_LAYERS = [16]  #@param
 OUTPUT_ACTIVATION = 'tanh'  #@param {type:"string"}
 
 # --- Point Mass Dynamics ---
@@ -17,12 +18,12 @@ NOISE_SIGMA = 0.0  #@param {type:"number"}
 N_NOISE_EPISODES = 1  #@param {type:"integer"}
 
 # --- CVT ---
-N_BINS = 1950  #@param {type:"integer"}
-CENTERS = "Precomputed_CVT_1950"  #@param ["Precomputed_CVT_1950", "CVT", "random"] {type:"string"}
+N_BINS = 5000  #@param {type:"integer"}
+CENTERS = "random"  #@param ["Precomputed_CVT_1950", "CVT", "random"] {type:"string"}
 
 # --- Fitness ---
-BARRIER_C = 10.0  #@param {type:"number"}
-BARRIER_K = 5.0  #@param {type:"number"}
+BARRIER_C = 0.0  #@param {type:"number"}
+BARRIER_K = 0.0  #@param {type:"number"}
 TOP_K = 3  #@param {type:"integer"}
 
 # --- Variation Operators ---
@@ -33,7 +34,7 @@ USE_LVE_CROSS = False  #@param {type:"boolean"}
 USE_STD_SUPPORT_LVE = False  #@param {type:"boolean"}
 GREEDY_MEM = True  #@param {type:"boolean"}
 
-PSE_MUT_SIGMA = 0.1  #@param {type:"number"}
+PSE_MUT_SIGMA = 0.05  #@param {type:"number"}
 LVE_MUT_SIGMA = 0.05  #@param {type:"number"}
 STD_SUPPORT_LO = -2.0  #@param {type:"number"}
 STD_SUPPORT_HI = 2.0  #@param {type:"number"}
@@ -43,7 +44,7 @@ WARMUP_PSE_MUT = True  #@param {type:"boolean"}
 WARMUP_PSE_LINE = True  #@param {type:"boolean"}
 
 N_TOTAL = 200  #@param {type:"integer"}
-WARMUP_THRESHOLD = 500  #@param {type:"integer"}
+WARMUP_THRESHOLD = 1000  #@param {type:"integer"}
 EMA_ALPHA = 0.3  #@param {type:"number"}
 TEMPERATURE = 0.3  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
@@ -68,7 +69,7 @@ GAMMA_MIX_BIN_PRED = 1e-3  #@param {type:"number"}
 MIX_ALPHA_LO = -0.1  #@param {type:"number"}
 MIX_ALPHA_HI = 1.1  #@param {type:"number"}
 
-N_STEPS = 500  #@param {type:"integer"}
+N_STEPS = 200  #@param {type:"integer"}
 
 # --- Checkpoint ---
 CHECKPOINT_PATH = ''  #@param {type:"string"}
@@ -83,6 +84,7 @@ torch.manual_seed(SEED)
 # =============================================================================
 # Setup
 # =============================================================================
+ARCHITECTURE = [2 * SPACE_DIM + 1] + HIDDEN_LAYERS + [SPACE_DIM]
 weight_dim = MLP_Agent(ARCHITECTURE, output_activation=OUTPUT_ACTIVATION).get_weight_dim()
 
 MAX_PATH_LENGTH = N_SIM_STEPS * DT / (1.0 - FRICTION)
@@ -90,13 +92,14 @@ MAX_PATH_LENGTH = N_SIM_STEPS * DT / (1.0 - FRICTION)
 fitness_fn = lambda info: info['heading_angle_var'] + BARRIER_C * np.exp(-BARRIER_K * info['path_length'] / info['max_path_length'])
 
 collector = PointMassCollector(
+    space_dim=SPACE_DIM,
     friction=FRICTION,
     dt=DT,
     n_steps=N_SIM_STEPS,
     noise_sigma=NOISE_SIGMA,
     n_episodes=N_NOISE_EPISODES,
 )
-bd = PlanarArmBD_CVT(n_bins=N_BINS, centers=CENTERS, bd_dim=2)
+bd = PlanarArmBD_CVT(n_bins=N_BINS, centers=CENTERS, bd_dim=SPACE_DIM)
 bm = MAPElitesBM(behavior_descriptor=bd, fitness_fn=fitness_fn, top_k=TOP_K, max_fitness=100)
 
 # --- Determine if any LVE operator is used ---
@@ -128,12 +131,12 @@ lm = None
 if USE_LVE:
     aux_losses = []
     if USE_BIN_PRED:
-        aux = BinPred(behavior_descriptor=bd, latent_dim=LATENT_DIM, output_dim=2)
+        aux = BinPred(behavior_descriptor=bd, latent_dim=LATENT_DIM, output_dim=SPACE_DIM)
         aux_losses.append((GAMMA_BIN_PRED, aux))
 
     if USE_MIX_BIN_PRED:
         mix_aux = MixBinPred(
-            behavior_descriptor=bd, latent_dim=LATENT_DIM, output_dim=2,
+            behavior_descriptor=bd, latent_dim=LATENT_DIM, output_dim=SPACE_DIM,
             alpha_lo=MIX_ALPHA_LO, alpha_hi=MIX_ALPHA_HI,
         )
         aux_losses.append((GAMMA_MIX_BIN_PRED, mix_aux))
@@ -203,6 +206,7 @@ if CHECKPOINT_PATH:
 # =============================================================================
 # Run
 # =============================================================================
+print(f"Space dim: {SPACE_DIM}")
 print(f"Architecture: {ARCHITECTURE}")
 print(f"Weight dim: {weight_dim}")
 print(f"Output activation: {OUTPUT_ACTIVATION}")
@@ -252,4 +256,3 @@ print(f"QD-score: {bm.qd_score():.4f}")
 # Plot
 # =============================================================================
 orchestrator.plot_history()
-sp.plot_allocation()
