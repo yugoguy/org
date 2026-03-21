@@ -9,7 +9,7 @@ import torch
 N_JOINTS = 1000  #@param {type:"integer"}
 END_EFFECTOR_DIM = 2  #@param {type:"integer"}
 NOISE_SIGMA = 0.05  #@param {type:"number"}
-N_NOISE_EPISODES = 3  #@param {type:"integer"}
+N_NOISE_EPISODES = 1  #@param {type:"integer"}
 
 N_BINS = 1950  #@param {type:"integer"}
 CENTERS = "Precomputed_CVT_1950"  #@param ["Precomputed_CVT_1950", "CVT", "random"] {type:"string"}
