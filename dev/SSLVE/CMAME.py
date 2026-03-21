@@ -64,7 +64,7 @@ class CMAMEEmitter:
 
         existing = sorted([f for _, f in bm.bins[bin_id]])
         if len(existing) < bm.top_k:
-            return 1, existing[0] - fitness, bin_id, fitness
+            return 2, fitness, bin_id, fitness
         if fitness < existing[-1]:
             return 1, existing[-1] - fitness, bin_id, fitness
 
@@ -117,36 +117,31 @@ class CMAMEEmitter:
 
         # Two-stage improvement ranking for CMA-ES tell
         if len(improving) > 0:
-            # Stage 1: new cells sorted by fitness (ascending, lower=better)
-            new_cells = [(theta, fitness) for theta, info, status, delta, bin_id, fitness
-                         in improving if status == 2]
+            # Build rank index for each candidate (lower = better for pycma)
+            # Stage 1: new cells sorted by fitness (ascending)
+            new_cells = [(i, fitness) for i, (theta, info, status, delta, bin_id, fitness)
+                         in enumerate(results) if status == 2]
             new_cells.sort(key=lambda x: x[1])
 
-            # Stage 2: improved existing sorted by delta (descending, larger=better)
-            improved = [(theta, delta) for theta, info, status, delta, bin_id, fitness
-                        in improving if status == 1]
-            improved.sort(key=lambda x: -x[1])
+            # Stage 2: improved existing sorted by delta (descending)
+            improved_existing = [(i, delta) for i, (theta, info, status, delta, bin_id, fitness)
+                                 in enumerate(results) if status == 1]
+            improved_existing.sort(key=lambda x: -x[1])
 
-            # Non-improving candidates
-            not_improving = [theta for theta, info, status, delta, bin_id, fitness
-                            in results if status == 0]
+            # Stage 3: non-improving (order doesn't matter)
+            not_improving = [i for i, (theta, info, status, delta, bin_id, fitness)
+                            in enumerate(results) if status == 0]
 
-            # Build ranking: new cells first, then improved, then rest
-            ranked_solutions = ([t for t, _ in new_cells]
-                                + [t for t, _ in improved]
-                                + not_improving)
+            # Assign synthetic fitness: ranked order -> 0, 1, 2, ...
+            rank_order = ([idx for idx, _ in new_cells]
+                          + [idx for idx, _ in improved_existing]
+                          + not_improving)
 
-            # Assign synthetic fitness values for pycma (lower = better for tell)
-            fitnesses_for_tell = list(range(len(ranked_solutions)))
+            fitnesses_for_tell = [0.0] * len(candidates)
+            for rank, idx in enumerate(rank_order):
+                fitnesses_for_tell[idx] = float(rank)
 
-            # Add any candidates not in ranked_solutions
-            ranked_set = set(id(t) for t in ranked_solutions)
-            for theta, info, status, delta, bin_id, fitness in results:
-                if id(theta) not in ranked_set:
-                    ranked_solutions.append(theta)
-                    fitnesses_for_tell.append(len(ranked_solutions))
-
-            self.es.tell(ranked_solutions, fitnesses_for_tell)
+            self.es.tell(candidates, fitnesses_for_tell)
         else:
             # No improvements: restart
             mean = self._select_parent(bm)
