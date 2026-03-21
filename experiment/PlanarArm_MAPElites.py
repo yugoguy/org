@@ -23,7 +23,7 @@ USE_PSE_LINE = True  #@param {type:"boolean"}
 GREEDY_MEM = True  #@param {type:"boolean"}
 PSE_MUT_SIGMA = 0.05  #@param {type:"number"}
 
-N_TOTAL = 500  #@param {type:"integer"}
+N_TOTAL = 1000  #@param {type:"integer"}
 EMA_ALPHA = 0.5  #@param {type:"number"}
 TEMPERATURE = 0.25  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
