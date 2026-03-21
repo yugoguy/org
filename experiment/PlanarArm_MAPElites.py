@@ -15,7 +15,7 @@ N_BINS = 1950  #@param {type:"integer"}
 CENTERS = "Precomputed_CVT_1950"  #@param ["Precomputed_CVT_1950", "CVT", "random"] {type:"string"}
 
 FITNESS = "sine_dependency"  #@param ["angle_variance", "sine_dependency"] {type:"string"}
-TOP_K = 3  #@param {type:"integer"}
+TOP_K = 1  #@param {type:"integer"}
 
 # --- Variation Operators ---
 USE_PSE_MUT = True  #@param {type:"boolean"}
