@@ -31,8 +31,8 @@ LVE_MUT_SIGMA = 0.05  #@param {type:"number"}
 WARMUP_PSE_MUT = True  #@param {type:"boolean"}
 WARMUP_PSE_LINE = True  #@param {type:"boolean"}
 
-N_TOTAL = 200  #@param {type:"integer"}
-WARMUP_THRESHOLD = 512  #@param {type:"integer"}
+N_TOTAL = 500  #@param {type:"integer"}
+WARMUP_THRESHOLD = 1000  #@param {type:"integer"}
 EMA_ALPHA = 0.5  #@param {type:"number"}
 TEMPERATURE = 0.25  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
