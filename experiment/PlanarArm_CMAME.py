@@ -23,6 +23,7 @@ SIGMA_INIT = 0.075  #@param {type:"number"}
 POPSIZE = 50  #@param {type:"integer"}
 GREEDY_MEM = True  #@param {type:"boolean"}
 N_INIT_SAMPLES = 1000  #@param {type:"integer"}
+SEPARABLE = True  #@param {type:"boolean"}
 
 N_STEPS = 1000  #@param {type:"integer"}
 
@@ -73,6 +74,7 @@ orchestrator = CMAME(
     greedy_mem=GREEDY_MEM,
     n_init_samples=N_INIT_SAMPLES,
     init_fn=init_fn,
+    separable=SEPARABLE,
 )
 
 # --- Load checkpoint if specified ---
