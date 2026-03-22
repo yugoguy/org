@@ -75,9 +75,59 @@ class MAPElitesBM:
         self.compute_rewards = False
         self.rewards = None
 
+    ### previous version ith different reward computation ... reward didn't depend on fitness improvements
+    # def update(self, thetas, infos):
+    #     """
+    #     Update archive with new candidates, then rebuild index views.
+
+    #     Args:
+    #         thetas: list of numpy arrays
+    #         infos: list of info dicts from Collector.collect()
+    #     """
+    #     rewards = [] if self.compute_rewards else None
+
+    #     for theta, info in zip(thetas, infos):
+    #         descriptor = self.behavior_descriptor.describe(info)
+    #         bin_id = self.behavior_descriptor.discretize(descriptor)
+    #         fitness = self.fitness_fn(info)
+
+    #         if bin_id not in self.bins:
+    #             self.bins[bin_id] = []
+
+    #         self.bins[bin_id].append((theta, fitness))
+
+    #         if len(self.bins[bin_id]) > self.top_k:
+    #             self.bins[bin_id].sort(key=lambda x: x[1])
+    #             removed = self.bins[bin_id][self.top_k:]
+    #             self.bins[bin_id] = self.bins[bin_id][:self.top_k]
+
+    #             if self.compute_rewards:
+    #                 # Check if this theta survived the cut
+    #                 inserted = any(t is theta for t, _ in self.bins[bin_id])
+    #                 if inserted:
+    #                     rank = next(i for i, (t, _) in enumerate(self.bins[bin_id]) if t is theta)
+    #                     rewards.append(1.0 / (rank + 1))
+    #                 else:
+    #                     rewards.append(0.0)
+                        
+    #         else:
+    #             if self.compute_rewards:
+    #                 # Inserted into a bin that wasn't full yet
+    #                 self.bins[bin_id].sort(key=lambda x: x[1])
+    #                 rank = next(i for i, (t, _) in enumerate(self.bins[bin_id]) if t is theta)
+    #                 rewards.append(1.0 / (rank + 1))
+
+    #     self.rewards = rewards
+    #     self._rebuild()
+
     def update(self, thetas, infos):
         """
         Update archive with new candidates, then rebuild index views.
+
+        Reward (when compute_rewards is True):
+            - New bin or underfull bin: abs(max_fitness - fitness) / (rank + 1)
+            - Displaces existing:      abs(displaced_fitness - fitness) / (rank + 1)
+            - Not inserted:            0.0
 
         Args:
             thetas: list of numpy arrays
@@ -93,28 +143,30 @@ class MAPElitesBM:
             if bin_id not in self.bins:
                 self.bins[bin_id] = []
 
+            # Record worst fitness before insertion (for displacement reward)
+            worst_before = self.bins[bin_id][-1][1] if len(self.bins[bin_id]) >= self.top_k else None
+
             self.bins[bin_id].append((theta, fitness))
 
             if len(self.bins[bin_id]) > self.top_k:
                 self.bins[bin_id].sort(key=lambda x: x[1])
-                removed = self.bins[bin_id][self.top_k:]
                 self.bins[bin_id] = self.bins[bin_id][:self.top_k]
 
                 if self.compute_rewards:
-                    # Check if this theta survived the cut
                     inserted = any(t is theta for t, _ in self.bins[bin_id])
                     if inserted:
                         rank = next(i for i, (t, _) in enumerate(self.bins[bin_id]) if t is theta)
-                        rewards.append(1.0 / (rank + 1))
+                        delta = abs(worst_before - fitness)
+                        rewards.append(delta / (rank + 1))
                     else:
                         rewards.append(0.0)
-                        
+
             else:
                 if self.compute_rewards:
-                    # Inserted into a bin that wasn't full yet
                     self.bins[bin_id].sort(key=lambda x: x[1])
                     rank = next(i for i, (t, _) in enumerate(self.bins[bin_id]) if t is theta)
-                    rewards.append(1.0 / (rank + 1))
+                    delta = abs(self.max_fitness - fitness)
+                    rewards.append(delta / (rank + 1))
 
         self.rewards = rewards
         self._rebuild()
