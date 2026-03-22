@@ -154,63 +154,45 @@ class AntOmniBD_Grid:
 
 
 
-class AntGaitBD_CVT:
+class AntGaitBD:
     """
-    CVT-based behavior descriptor for Ant gait, using 4D foot contact
-    duty factors (fraction of timesteps each foot is in contact).
-    Domain is the unit hypercube [0, 1]^4.
+    Grid-based behavior descriptor for Ant gait, using 4D foot contact
+    duty factors. Domain is [0, 1]^4.
 
     Args:
-        n_bins: number of CVT bins
-        centers: "cvt", "random", or np.ndarray of shape (n_bins, 4)
-        cvt_iters: Lloyd's algorithm iterations (only if centers="cvt")
-        cvt_samples: samples per iteration (only if centers="cvt")
-        seed: random seed for center computation
+        bin_ranges: list of (min, max) per dimension
+        bin_sizes: list of number of bins per dimension
     """
 
-    def __init__(self, n_bins=1000, centers="cvt",
-                 cvt_iters=100, cvt_samples=100000, seed=0):
-        self.n_bins = n_bins
-        self.bd_dim = 4
-
-        if isinstance(centers, np.ndarray):
-            self.centers = centers
-            self.n_bins = len(centers)
-        elif centers == "cvt":
-            self.centers = self._compute_cvt(n_bins, cvt_iters, cvt_samples, seed)
-        elif centers == "random":
-            rng = np.random.RandomState(seed)
-            self.centers = rng.uniform(0, 1, (n_bins, 4))
-        else:
-            raise ValueError(f"Unknown centers option: {centers}")
-
-    def _compute_cvt(self, n_bins, cvt_iters, cvt_samples, seed):
-        rng = np.random.RandomState(seed)
-        centers = rng.uniform(0, 1, (n_bins, 4))
-        for _ in range(cvt_iters):
-            samples = rng.uniform(0, 1, (cvt_samples, 4))
-            dists = np.sum((samples[:, None, :] - centers[None, :, :]) ** 2, axis=2)
-            assignments = np.argmin(dists, axis=1)
-            new_centers = np.empty_like(centers)
-            for i in range(n_bins):
-                mask = assignments == i
-                if mask.any():
-                    new_centers[i] = samples[mask].mean(axis=0)
-                else:
-                    new_centers[i] = centers[i]
-            centers = new_centers
-        return centers
+    def __init__(self, bin_ranges=None, bin_sizes=None):
+        if bin_ranges is None:
+            bin_ranges = [(0.0, 1.0)] * 4
+        if bin_sizes is None:
+            bin_sizes = [5, 5, 5, 5]
+        self.bin_ranges = bin_ranges
+        self.bin_sizes = bin_sizes
 
     def describe(self, info):
         return info['foot_contacts']
 
     def discretize(self, descriptor):
-        point = np.array(descriptor)
-        dists = np.sum((self.centers - point) ** 2, axis=1)
-        return int(np.argmin(dists))
+        bin_id = []
+        for val, (lo, hi), n_bins in zip(descriptor, self.bin_ranges, self.bin_sizes):
+            clamped = float(max(lo, min(val, hi)))
+            idx = int((clamped - lo) / (hi - lo) * n_bins)
+            idx = min(idx, n_bins - 1)
+            bin_id.append(idx)
+        return tuple(bin_id)
 
     def total_bins(self):
-        return self.n_bins
+        result = 1
+        for n in self.bin_sizes:
+            result *= n
+        return result
 
     def bin_value(self, bin_id):
-        return self.centers[bin_id]
+        value = []
+        for idx, (lo, hi), n_bins in zip(bin_id, self.bin_ranges, self.bin_sizes):
+            cell_width = (hi - lo) / n_bins
+            value.append(lo + (idx + 0.5) * cell_width)
+        return np.array(value)
