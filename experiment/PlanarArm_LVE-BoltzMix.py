@@ -22,10 +22,13 @@ USE_PSE_MUT = True  #@param {type:"boolean"}
 USE_PSE_LINE = True  #@param {type:"boolean"}
 USE_LVE_MUT = True  #@param {type:"boolean"}
 USE_LVE_CROSS = True  #@param {type:"boolean"}
+USE_STD_SUPPORT_LVE = True  #@param {type:"boolean"}
 GREEDY_MEM = True  #@param {type:"boolean"}
 
 PSE_MUT_SIGMA = 0.05  #@param {type:"number"}
 LVE_MUT_SIGMA = 0.05  #@param {type:"number"}
+STD_SUPPORT_LO = -2.0  #@param {type:"number"}
+STD_SUPPORT_HI = 2.0  #@param {type:"number"}
 
 # --- Warmup Operators ---
 WARMUP_PSE_MUT = True  #@param {type:"boolean"}
@@ -33,8 +36,8 @@ WARMUP_PSE_LINE = True  #@param {type:"boolean"}
 
 N_TOTAL = 1000  #@param {type:"integer"}
 WARMUP_THRESHOLD = 1000  #@param {type:"integer"}
-EMA_ALPHA = 0.5  #@param {type:"number"}
-TEMPERATURE = 0.25  #@param {type:"number"}
+EMA_ALPHA = 0.1  #@param {type:"number"}
+TEMPERATURE = 10  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
 
 # --- Latent Module ---
@@ -111,6 +114,9 @@ lm = BaseBetaVAE(
     hidden_dims=HIDDEN_DIMS,
     beta=BETA,
 )
+
+if USE_STD_SUPPORT_LVE:
+    operators.append(StandardNormalSupportLVE(lo=STD_SUPPORT_LO, hi=STD_SUPPORT_HI))
 
 sp = BoltzmannMix(
     agent_class=PlanarArmAgent,
