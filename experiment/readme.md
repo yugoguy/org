@@ -1,4 +1,4 @@
-If in Colab
+If in Colab or Jupyter Notebook
 ```
 !rm -rf org && git clone --filter=blob:none --sparse https://github.com/yugoguy/org.git
 !cd org && git sparse-checkout set dev/SSLVE && git checkout Latent-Variable-Evolution
