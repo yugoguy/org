@@ -163,8 +163,7 @@ class AntOmniCollector:
         contact_threshold: cfrc_ext force magnitude threshold for contact detection
     """
 
-    FOOT_BODIES = ('front_left_foot', 'front_right_foot',
-                   'left_back_foot', 'right_back_foot')
+    FOOT_BODIES = ('aux_1', 'aux_2', 'aux_3', 'aux_4')
 
     def __init__(self, max_steps=1000, n_episodes=1, ctrl_cost_weight=0.5, seed=None,
                  contact_threshold=0.5):
