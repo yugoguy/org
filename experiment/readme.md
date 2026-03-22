@@ -8,6 +8,7 @@ If in Colab
 import sys, os, glob
 sys.path.insert(0, 'org/dev/SSLVE')
 for f in sorted(glob.glob('org/dev/SSLVE/*.py')):
+    print(f"Running: {f}")
     %run {f}
 ```
 
