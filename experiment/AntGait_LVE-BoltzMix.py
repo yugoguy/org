@@ -27,10 +27,13 @@ USE_PSE_MUT = True  #@param {type:"boolean"}
 USE_PSE_LINE = True  #@param {type:"boolean"}
 USE_LVE_MUT = True  #@param {type:"boolean"}
 USE_LVE_CROSS = True  #@param {type:"boolean"}
+USE_STD_SUPPORT_LVE = True  #@param {type:"boolean"}
 GREEDY_MEM = True  #@param {type:"boolean"}
 
 PSE_MUT_SIGMA = 0.05  #@param {type:"number"}
 LVE_MUT_SIGMA = 0.05  #@param {type:"number"}
+STD_SUPPORT_LO = -2.0  #@param {type:"number"}
+STD_SUPPORT_HI = 2.0  #@param {type:"number"}
 
 # --- Warmup Operators ---
 WARMUP_PSE_MUT = True  #@param {type:"boolean"}
@@ -106,6 +109,9 @@ lm = BaseBetaVAE(
     hidden_dims=HIDDEN_DIMS,
     beta=BETA,
 )
+
+if USE_STD_SUPPORT_LVE:
+    operators.append(StandardNormalSupportLVE(lo=STD_SUPPORT_LO, hi=STD_SUPPORT_HI))
 
 sp = BoltzmannMix(
     agent_class=MLP_Agent,
