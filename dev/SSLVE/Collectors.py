@@ -152,20 +152,27 @@ class AntOmniCollector:
     """
     Collector for Ant-v5 omni-directional locomotion.
     Runs episodes and returns final CoM (x, y), survival sum, torque sum,
-    cumulative path length, and heading angle variance (curvature consistency).
+    cumulative path length, heading angle variance, and per-leg contact
+    duty factors (fraction of timesteps each foot is in contact).
 
     Args:
         max_steps: max steps per episode
         n_episodes: number of episodes to average
         ctrl_cost_weight: weight for control cost in env reward
         seed: random seed
+        contact_threshold: cfrc_ext force magnitude threshold for contact detection
     """
 
-    def __init__(self, max_steps=1000, n_episodes=1, ctrl_cost_weight=0.5, seed=None):
+    FOOT_BODIES = ('front_left_foot', 'front_right_foot',
+                   'left_back_foot', 'right_back_foot')
+
+    def __init__(self, max_steps=1000, n_episodes=1, ctrl_cost_weight=0.5, seed=None,
+                 contact_threshold=0.5):
         self.max_steps = max_steps
         self.n_episodes = n_episodes
         self.ctrl_cost_weight = ctrl_cost_weight
         self.seed = seed
+        self.contact_threshold = contact_threshold
 
     def collect(self, agent):
         final_xs = []
@@ -176,6 +183,8 @@ class AntOmniCollector:
         path_lengths = []
         heading_angle_vars = []
 
+        foot_contacts_all = []
+
         for ep in range(self.n_episodes):
             env = gym.make('Ant-v5',
                            ctrl_cost_weight=self.ctrl_cost_weight,
@@ -185,12 +194,19 @@ class AntOmniCollector:
                            max_episode_steps=self.max_steps)
             seed = self.seed + ep if self.seed is not None else None
             obs, _ = env.reset(seed=seed)
+
+            # Resolve foot body indices once per episode (model is fixed)
+            foot_ids = []
+            for name in self.FOOT_BODIES:
+                foot_ids.append(env.unwrapped.model.body(name).id)
+
             survival_total = 0.0
             torque_total = 0.0
             n_steps = 0
             path_length = 0.0
             prev_xy = env.unwrapped.get_body_com("torso")[:2].copy()
             headings = []
+            foot_contact_counts = np.zeros(4)
 
             for _ in range(self.max_steps):
                 action = agent.act(obs)
@@ -198,6 +214,13 @@ class AntOmniCollector:
                 survival_total += step_info.get('reward_survive', 1.0)
                 torque_total += step_info.get('reward_ctrl', 0.0)
                 n_steps += 1
+
+                # Foot contact detection via cfrc_ext force magnitude
+                cfrc = env.unwrapped.data.cfrc_ext
+                for i, bid in enumerate(foot_ids):
+                    force_mag = np.linalg.norm(cfrc[bid, :3])
+                    if force_mag > self.contact_threshold:
+                        foot_contact_counts[i] += 1
 
                 xy = env.unwrapped.get_body_com("torso")[:2]
                 delta = xy - prev_xy
@@ -209,6 +232,12 @@ class AntOmniCollector:
 
                 if terminated or truncated:
                     break
+
+            # Foot contact duty factors for this episode
+            if n_steps > 0:
+                foot_contacts_all.append(foot_contact_counts / n_steps)
+            else:
+                foot_contacts_all.append(np.zeros(4))
 
             # Variance of turning angles (heading differences, wraparound-corrected)
             if len(headings) >= 2:
@@ -227,6 +256,8 @@ class AntOmniCollector:
             path_lengths.append(path_length)
             env.close()
 
+        mean_foot_contacts = np.mean(foot_contacts_all, axis=0)
+
         return {
             'final_xy': (float(np.mean(final_xs)), float(np.mean(final_ys))),
             'survival_sum': float(np.mean(survival_sums)),
@@ -234,107 +265,5 @@ class AntOmniCollector:
             'steps': float(np.mean(steps_list)),
             'path_length': float(np.mean(path_lengths)),
             'heading_angle_var': float(np.mean(heading_angle_vars)),
-        }
-
-
-
-class PointMassCollector:
-    """
-    Collector for ND point mass trajectory generation.
-
-    Dynamics:
-        vel = friction * vel + force
-        pos = pos + dt * vel
-
-    Agent input: (pos_1..N, vel_1..N, t/T) — (2N+1)D
-    Agent output: (force_1..N) — ND, tanh-bounded [-1, 1]
-
-    Final position normalized by max_path_length = n_steps * dt / (1 - friction).
-
-    Args:
-        space_dim: dimension of space (default 2)
-        friction: velocity decay factor per step (0 < friction < 1)
-        dt: time step size
-        n_steps: number of simulation steps per episode
-        noise_sigma: std of Gaussian noise added to force per episode (0 = deterministic)
-        n_episodes: number of noised episodes to average (ignored if noise_sigma=0)
-    """
-
-    def __init__(self, space_dim=2, friction=0.9, dt=0.1, n_steps=100,
-                 noise_sigma=0.0, n_episodes=1):
-        self.space_dim = space_dim
-        self.friction = friction
-        self.dt = dt
-        self.n_steps = n_steps
-        self.noise_sigma = noise_sigma
-        self.n_episodes = n_episodes
-        self.max_path_length = n_steps * dt / (1.0 - friction)
-
-    def _simulate(self, agent):
-        """Run one episode, return final_pos, heading_angle_var, path_length."""
-        N = self.space_dim
-        pos = np.zeros(N)
-        vel = np.zeros(N)
-        T = self.n_steps
-
-        displacements = []
-        path_length = 0.0
-
-        for t in range(1, T + 1):
-            obs = np.concatenate([pos, vel, [t / T]])
-            force = agent.act(obs)
-
-            if self.noise_sigma > 0.0:
-                force = force + self.noise_sigma * np.random.randn(N)
-                force = np.clip(force, -1.0, 1.0)
-
-            vel = self.friction * vel + force
-            delta = self.dt * vel
-            pos = pos + delta
-
-            dist = np.linalg.norm(delta)
-            path_length += dist
-            if dist > 1e-8:
-                displacements.append(delta.copy())
-
-        # Heading angle variance via angle between consecutive displacements
-        if len(displacements) >= 2:
-            angles = []
-            for i in range(len(displacements) - 1):
-                d1 = displacements[i]
-                d2 = displacements[i + 1]
-                cos_a = np.dot(d1, d2) / (np.linalg.norm(d1) * np.linalg.norm(d2))
-                cos_a = np.clip(cos_a, -1.0, 1.0)
-                angles.append(np.arccos(cos_a))
-            heading_angle_var = float(np.var(angles))
-        else:
-            heading_angle_var = 0.0
-
-        return tuple(pos), heading_angle_var, path_length
-
-    def collect(self, agent):
-        n_ep = 1 if self.noise_sigma == 0.0 else self.n_episodes
-        N = self.space_dim
-
-        final_positions = []
-        heading_vars = []
-        path_lengths = []
-
-        for _ in range(n_ep):
-            final_pos, hav, pl = self._simulate(agent)
-            final_positions.append(final_pos)
-            heading_vars.append(hav)
-            path_lengths.append(pl)
-
-        mean_pos = tuple(
-            float(np.mean([p[d] for p in final_positions]))
-            for d in range(N)
-        )
-        normalized_pos = tuple(v / self.max_path_length for v in mean_pos)
-
-        return {
-            'end_effector': normalized_pos,
-            'heading_angle_var': float(np.mean(heading_vars)),
-            'path_length': float(np.mean(path_lengths)),
-            'max_path_length': self.max_path_length,
+            'foot_contacts': tuple(float(v) for v in mean_foot_contacts),
         }
