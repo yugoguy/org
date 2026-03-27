@@ -182,6 +182,7 @@ class AntOmniCollector:
         steps_list = []
         path_lengths = []
         heading_angle_vars = []
+        forward_sums = []
         foot_contacts_all = []
 
         for ep in range(self.n_episodes):
@@ -201,6 +202,7 @@ class AntOmniCollector:
 
             survival_total = 0.0
             torque_total = 0.0
+            forward_total = 0.0
             n_steps = 0
             path_length = 0.0
             prev_xy = env.unwrapped.get_body_com("torso")[:2].copy()
@@ -212,6 +214,7 @@ class AntOmniCollector:
                 obs, reward, terminated, truncated, step_info = env.step(action)
                 survival_total += step_info.get('reward_survive', 1.0)
                 torque_total += step_info.get('reward_ctrl', 0.0)
+                forward_total += step_info.get('reward_forward', 0.0)
                 n_steps += 1
 
                 contacted = set()
@@ -253,6 +256,7 @@ class AntOmniCollector:
             final_ys.append(float(xy[1]))
             survival_sums.append(survival_total)
             torque_sums.append(abs(torque_total))
+            forward_sums.append(forward_total)
             steps_list.append(n_steps)
             path_lengths.append(path_length)
             env.close()
@@ -263,6 +267,7 @@ class AntOmniCollector:
             'final_xy': (float(np.mean(final_xs)), float(np.mean(final_ys))),
             'survival_sum': float(np.mean(survival_sums)),
             'torque_sum': float(np.mean(torque_sums)),
+            'forward_sum': float(np.mean(forward_sums)),
             'steps': float(np.mean(steps_list)),
             'path_length': float(np.mean(path_lengths)),
             'heading_angle_var': float(np.mean(heading_angle_vars)),
