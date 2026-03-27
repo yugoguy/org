@@ -16,18 +16,18 @@ CTRL_COST_WEIGHT = 0.5  #@param {type:"number"}
 BIN_SIZES = [10, 10, 10, 10]  #@param
 
 # --- Fitness ---
-W_BASE = 0.1  #@param {type:"number"}
+W_BASE = 0.01  #@param {type:"number"}
 W_PATH = 1.0  #@param {type:"number"}
 TOP_K = 1  #@param {type:"integer"}
 MAX_FITNESS = 0.0  #@param {type:"number"}
 
 # --- CMA-ME ---
-N_EMITTERS = 20  #@param {type:"integer"}
-SIGMA_INIT = 0.5  #@param {type:"number"}
+N_EMITTERS = 10  #@param {type:"integer"}
+SIGMA_INIT = 0.05  #@param {type:"number"}
 POPSIZE = 50  #@param {type:"integer"}
 GREEDY_MEM = True  #@param {type:"boolean"}
 SEPARABLE = True  #@param {type:"boolean"}
-N_INIT_SAMPLES = 1000  #@param {type:"integer"}
+N_INIT_SAMPLES = 500  #@param {type:"integer"}
 
 N_STEPS = 1000  #@param {type:"integer"}
 
