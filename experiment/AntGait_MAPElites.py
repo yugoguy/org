@@ -11,7 +11,6 @@ OUTPUT_ACTIVATION = 'tanh'  #@param {type:"string"}
 MAX_STEPS = 500  #@param {type:"integer"}
 N_EPISODES = 2  #@param {type:"integer"}
 CTRL_COST_WEIGHT = 0.5  #@param {type:"number"}
-CONTACT_THRESHOLD = 1  #@param {type:"number"}
 
 # --- Gait BD Grid ---
 BIN_SIZES = [10, 10, 10, 10]  #@param
@@ -56,7 +55,6 @@ collector = AntOmniCollector(
     n_episodes=N_EPISODES,
     ctrl_cost_weight=CTRL_COST_WEIGHT,
     seed=SEED,
-    contact_threshold=CONTACT_THRESHOLD,
 )
 bd = AntGaitBD(bin_sizes=BIN_SIZES)
 bm = MAPElitesBM(behavior_descriptor=bd, fitness_fn=fitness_fn, top_k=TOP_K, max_fitness=MAX_FITNESS)
@@ -101,7 +99,6 @@ print(f"Weight dim: {weight_dim}")
 print(f"Output activation: {OUTPUT_ACTIVATION}")
 print(f"Max steps: {MAX_STEPS}, Episodes: {N_EPISODES}")
 print(f"Ctrl cost weight: {CTRL_COST_WEIGHT}")
-print(f"Contact threshold: {CONTACT_THRESHOLD}")
 print(f"Fitness weights: W_BASE={W_BASE}, W_PATH={W_PATH}")
 print(f"Greedy member selection: {GREEDY_MEM}")
 print(f"Gait BD grid: {BIN_SIZES} ({bd.total_bins()} bins)")
