@@ -197,6 +197,7 @@ class AntOmniCollector:
             foot_geom_id_to_idx = {}
             for i, name in enumerate(self.FOOT_GEOM_NAMES):
                 foot_geom_id_to_idx[env.unwrapped.model.geom(name).id] = i
+            floor_geom_id = env.unwrapped.model.geom('floor').id
 
             survival_total = 0.0
             torque_total = 0.0
@@ -217,10 +218,10 @@ class AntOmniCollector:
                 for c in range(env.unwrapped.data.ncon):
                     g1 = env.unwrapped.data.contact[c].geom1
                     g2 = env.unwrapped.data.contact[c].geom2
-                    if g1 in foot_geom_id_to_idx:
-                        contacted.add(foot_geom_id_to_idx[g1])
-                    if g2 in foot_geom_id_to_idx:
+                    if g1 == floor_geom_id and g2 in foot_geom_id_to_idx:
                         contacted.add(foot_geom_id_to_idx[g2])
+                    elif g2 == floor_geom_id and g1 in foot_geom_id_to_idx:
+                        contacted.add(foot_geom_id_to_idx[g1])
                 for i in contacted:
                     foot_contact_counts[i] += 1
 
