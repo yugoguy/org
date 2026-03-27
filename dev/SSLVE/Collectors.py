@@ -155,23 +155,24 @@ class AntOmniCollector:
     cumulative path length, heading angle variance, and per-leg contact
     duty factors (fraction of timesteps each foot is in contact).
 
+    Contact detection uses data.contact (geom-pair contact list) with
+    ankle geom IDs resolved by name at runtime.
+
     Args:
         max_steps: max steps per episode
         n_episodes: number of episodes to average
         ctrl_cost_weight: weight for control cost in env reward
         seed: random seed
-        contact_threshold: cfrc_ext force magnitude threshold for contact detection
     """
 
-    FOOT_BODIES = ('ankle_1', 'ankle_2', 'ankle_3', 'ankle_4')
+    FOOT_GEOM_NAMES = ('left_ankle_geom', 'right_ankle_geom',
+                       'third_ankle_geom', 'fourth_ankle_geom')
 
-    def __init__(self, max_steps=1000, n_episodes=1, ctrl_cost_weight=0.5, seed=None,
-                 contact_threshold=0.5):
+    def __init__(self, max_steps=1000, n_episodes=1, ctrl_cost_weight=0.5, seed=None):
         self.max_steps = max_steps
         self.n_episodes = n_episodes
         self.ctrl_cost_weight = ctrl_cost_weight
         self.seed = seed
-        self.contact_threshold = contact_threshold
 
     def collect(self, agent):
         final_xs = []
@@ -181,7 +182,6 @@ class AntOmniCollector:
         steps_list = []
         path_lengths = []
         heading_angle_vars = []
-
         foot_contacts_all = []
 
         for ep in range(self.n_episodes):
@@ -194,10 +194,9 @@ class AntOmniCollector:
             seed = self.seed + ep if self.seed is not None else None
             obs, _ = env.reset(seed=seed)
 
-            # Resolve foot body indices once per episode (model is fixed)
-            foot_ids = []
-            for name in self.FOOT_BODIES:
-                foot_ids.append(env.unwrapped.model.body(name).id)
+            foot_geom_id_to_idx = {}
+            for i, name in enumerate(self.FOOT_GEOM_NAMES):
+                foot_geom_id_to_idx[env.unwrapped.model.geom(name).id] = i
 
             survival_total = 0.0
             torque_total = 0.0
@@ -214,12 +213,16 @@ class AntOmniCollector:
                 torque_total += step_info.get('reward_ctrl', 0.0)
                 n_steps += 1
 
-                # Foot contact detection via cfrc_ext magnitude
-                cfrc = env.unwrapped.data.cfrc_ext
-                for i, bid in enumerate(foot_ids):
-                    force_mag = np.linalg.norm(cfrc[bid])
-                    if force_mag > self.contact_threshold:
-                        foot_contact_counts[i] += 1
+                contacted = set()
+                for c in range(env.unwrapped.data.ncon):
+                    g1 = env.unwrapped.data.contact[c].geom1
+                    g2 = env.unwrapped.data.contact[c].geom2
+                    if g1 in foot_geom_id_to_idx:
+                        contacted.add(foot_geom_id_to_idx[g1])
+                    if g2 in foot_geom_id_to_idx:
+                        contacted.add(foot_geom_id_to_idx[g2])
+                for i in contacted:
+                    foot_contact_counts[i] += 1
 
                 xy = env.unwrapped.get_body_com("torso")[:2]
                 delta = xy - prev_xy
@@ -232,13 +235,11 @@ class AntOmniCollector:
                 if terminated or truncated:
                     break
 
-            # Foot contact duty factors for this episode
             if n_steps > 0:
                 foot_contacts_all.append(foot_contact_counts / n_steps)
             else:
                 foot_contacts_all.append(np.zeros(4))
 
-            # Variance of turning angles (heading differences, wraparound-corrected)
             if len(headings) >= 2:
                 headings = np.array(headings)
                 diffs = np.diff(headings)
