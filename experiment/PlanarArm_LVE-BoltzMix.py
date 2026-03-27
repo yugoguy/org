@@ -34,8 +34,8 @@ STD_SUPPORT_HI = 2.0  #@param {type:"number"}
 WARMUP_PSE_MUT = True  #@param {type:"boolean"}
 WARMUP_PSE_LINE = True  #@param {type:"boolean"}
 
-N_TOTAL = 1000  #@param {type:"integer"}
-WARMUP_THRESHOLD = 1000  #@param {type:"integer"}
+N_TOTAL = 500  #@param {type:"integer"}
+WARMUP_THRESHOLD = 500  #@param {type:"integer"}
 EMA_ALPHA = 0.1  #@param {type:"number"}
 TEMPERATURE = 10  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
