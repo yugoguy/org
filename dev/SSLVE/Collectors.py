@@ -163,7 +163,7 @@ class AntOmniCollector:
         contact_threshold: cfrc_ext force magnitude threshold for contact detection
     """
 
-    FOOT_BODIES = ('aux_1', 'aux_2', 'aux_3', 'aux_4')
+    FOOT_BODIES = ('ankle_1', 'ankle_2', 'ankle_3', 'ankle_4')
 
     def __init__(self, max_steps=1000, n_episodes=1, ctrl_cost_weight=0.5, seed=None,
                  contact_threshold=0.5):
@@ -214,10 +214,10 @@ class AntOmniCollector:
                 torque_total += step_info.get('reward_ctrl', 0.0)
                 n_steps += 1
 
-                # Foot contact detection via cfrc_ext force magnitude
+                # Foot contact detection via cfrc_ext magnitude
                 cfrc = env.unwrapped.data.cfrc_ext
                 for i, bid in enumerate(foot_ids):
-                    force_mag = np.linalg.norm(cfrc[bid, :3])
+                    force_mag = np.linalg.norm(cfrc[bid])
                     if force_mag > self.contact_threshold:
                         foot_contact_counts[i] += 1
 
