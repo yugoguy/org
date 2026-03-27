@@ -12,12 +12,11 @@ MAX_STEPS = 500  #@param {type:"integer"}
 N_EPISODES = 2  #@param {type:"integer"}
 CTRL_COST_WEIGHT = 0.5  #@param {type:"number"}
 
-
 # --- Gait BD Grid ---
 BIN_SIZES = [10, 10, 10, 10]  #@param
 
 # --- Fitness ---
-W_BASE = 0.1  #@param {type:"number"}
+W_BASE = 0.01  #@param {type:"number"}
 W_PATH = 1.0  #@param {type:"number"}
 TOP_K = 3  #@param {type:"integer"}
 MAX_FITNESS = 0.0  #@param {type:"number"}
@@ -180,4 +179,4 @@ print(f"QD-score: {bm.qd_score():.4f}")
 # Plot
 # =============================================================================
 orchestrator.plot_history()
-sp.plot_allocation()
+#sp.plot_allocation()
