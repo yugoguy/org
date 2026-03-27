@@ -29,7 +29,7 @@ PSE_MUT_SIGMA = 0.05  #@param {type:"number"}
 
 N_TOTAL = 500  #@param {type:"integer"}
 EMA_ALPHA = 0.1  #@param {type:"number"}
-TEMPERATURE = 10  #@param {type:"number"}
+TEMPERATURE = 1  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
 
 N_STEPS = 1000  #@param {type:"integer"}
