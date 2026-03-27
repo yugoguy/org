@@ -13,10 +13,10 @@ N_EPISODES = 2  #@param {type:"integer"}
 CTRL_COST_WEIGHT = 0.5  #@param {type:"number"}
 
 # --- Gait BD Grid ---
-BIN_SIZES = [10, 10, 10, 10]  #@param
+BIN_SIZES = [10, 10 , 10, 10]  #@param
 
 # --- Fitness ---
-W_BASE = 0.1  #@param {type:"number"}
+W_BASE = 0.01  #@param {type:"number"}
 W_PATH = 1.0  #@param {type:"number"}
 TOP_K = 1  #@param {type:"integer"}
 MAX_FITNESS = 0.0  #@param {type:"number"}
@@ -27,7 +27,7 @@ USE_PSE_LINE = True  #@param {type:"boolean"}
 GREEDY_MEM = True  #@param {type:"boolean"}
 PSE_MUT_SIGMA = 0.05  #@param {type:"number"}
 
-N_TOTAL = 500  #@param {type:"integer"}
+N_TOTAL = 300  #@param {type:"integer"}
 EMA_ALPHA = 0.1  #@param {type:"number"}
 TEMPERATURE = 10  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
