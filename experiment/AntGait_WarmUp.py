@@ -19,7 +19,7 @@ BIN_SIZES = [10, 10, 10, 10]  #@param
 W_BASE = 0.01  #@param {type:"number"}
 W_PATH = 1.0  #@param {type:"number"}
 TOP_K = 3  #@param {type:"integer"}
-MAX_FITNESS = 0.0  #@param {type:"number"}
+MAX_FITNESS = 10.0  #@param {type:"number"}
 
 # --- Warmup Operators ---
 USE_PSE_MUT = True  #@param {type:"boolean"}
