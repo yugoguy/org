@@ -9,7 +9,7 @@ import torch
 ARCHITECTURE = [27, 64, 64, 8]  #@param
 OUTPUT_ACTIVATION = 'tanh'  #@param {type:"string"}
 MAX_STEPS = 500  #@param {type:"integer"}
-N_EPISODES = 2  #@param {type:"integer"}
+N_EPISODES = 3  #@param {type:"integer"}
 CTRL_COST_WEIGHT = 0.5  #@param {type:"number"}
 
 # --- Gait BD Grid ---
