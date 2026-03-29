@@ -9,7 +9,7 @@ import torch
 ARCHITECTURE = [27, 64, 64, 8]  #@param
 OUTPUT_ACTIVATION = 'tanh'  #@param {type:"string"}
 MAX_STEPS = 500  #@param {type:"integer"}
-N_EPISODES = 2  #@param {type:"integer"}
+N_EPISODES = 3  #@param {type:"integer"}
 CTRL_COST_WEIGHT = 0.5  #@param {type:"number"}
 
 # --- Gait BD Grid ---
@@ -17,7 +17,7 @@ BIN_SIZES = [10, 10, 10, 10]  #@param
 
 # --- Fitness ---
 TOP_K = 3  #@param {type:"integer"}
-MAX_FITNESS = 10.0  #@param {type:"number"}
+MAX_FITNESS = 500.0  #@param {type:"number"}
 
 # --- Variation Operators ---
 USE_PSE_MUT = True  #@param {type:"boolean"}
@@ -37,16 +37,16 @@ WARMUP_PSE_MUT = True  #@param {type:"boolean"}
 WARMUP_PSE_LINE = True  #@param {type:"boolean"}
 
 N_TOTAL = 500  #@param {type:"integer"}
-WARMUP_THRESHOLD = 2048  #@param {type:"integer"}
-EMA_ALPHA = 0.1  #@param {type:"number"}
-TEMPERATURE = 1  #@param {type:"number"}
+WARMUP_THRESHOLD = 4096  #@param {type:"integer"}
+EMA_ALPHA = 0.25  #@param {type:"number"}
+TEMPERATURE = 10  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
 
 # --- Latent Module ---
-USE_FLOW_PRIOR = True  #@param {type:"boolean"}
+USE_FLOW_PRIOR = False  #@param {type:"boolean"}
 LATENT_DIM = 64  #@param {type:"integer"}
 HIDDEN_DIMS = [256]  #@param
-BETA = 1e-2  #@param {type:"number"}
+BETA = 1e-3  #@param {type:"number"}
 NUM_FLOWS = 3  #@param {type:"integer"}
 FLOW_HIDDEN = 128  #@param {type:"integer"}
 FLOW_HIDDEN_LAYERS = 2  #@param {type:"integer"}
