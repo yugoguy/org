@@ -39,7 +39,7 @@ WARMUP_PSE_LINE = True  #@param {type:"boolean"}
 N_TOTAL = 500  #@param {type:"integer"}
 WARMUP_THRESHOLD = 4096  #@param {type:"integer"}
 EMA_ALPHA = 0.25  #@param {type:"number"}
-TEMPERATURE = 1  #@param {type:"number"}
+TEMPERATURE = 10  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
 
 # --- Latent Module ---
@@ -50,7 +50,7 @@ EPOCHS = 50  #@param {type:"integer"}
 BATCH_SIZE = 1024  #@param {type:"integer"}
 LR = 1e-3  #@param {type:"number"}
 
-N_STEPS = 1000  #@param {type:"integer"}
+N_STEPS = 200  #@param {type:"integer"}
 
 # --- Checkpoint ---
 CHECKPOINT_PATH = ''  #@param {type:"string"}
