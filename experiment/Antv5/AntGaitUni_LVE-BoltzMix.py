@@ -17,7 +17,7 @@ BIN_SIZES = [10, 10, 10, 10]  #@param
 
 # --- Fitness ---
 TOP_K = 3  #@param {type:"integer"}
-MAX_FITNESS = 10.0  #@param {type:"number"}
+MAX_FITNESS = 500.0  #@param {type:"number"}
 
 # --- Variation Operators ---
 USE_PSE_MUT = True  #@param {type:"boolean"}
@@ -38,16 +38,16 @@ WARMUP_PSE_LINE = True  #@param {type:"boolean"}
 
 N_TOTAL = 500  #@param {type:"integer"}
 WARMUP_THRESHOLD = 1000  #@param {type:"integer"}
-EMA_ALPHA = 0.1  #@param {type:"number"}
+EMA_ALPHA = 0.25  #@param {type:"number"}
 TEMPERATURE = 1  #@param {type:"number"}
 MIN_PROPORTION = 0.05  #@param {type:"number"}
 
 # --- Latent Module ---
 LATENT_DIM = 64  #@param {type:"integer"}
 HIDDEN_DIMS = [256]  #@param
-BETA = 1e-2  #@param {type:"number"}
+BETA = 1e-3  #@param {type:"number"}
 EPOCHS = 50  #@param {type:"integer"}
-BATCH_SIZE = 512  #@param {type:"integer"}
+BATCH_SIZE = 1024  #@param {type:"integer"}
 LR = 1e-3  #@param {type:"number"}
 
 N_STEPS = 1000  #@param {type:"integer"}
