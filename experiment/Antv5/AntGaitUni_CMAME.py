@@ -17,7 +17,7 @@ BIN_SIZES = [10, 10, 10, 10]  #@param
 
 # --- Fitness ---
 TOP_K = 1  #@param {type:"integer"}
-MAX_FITNESS = 10.0  #@param {type:"number"}
+MAX_FITNESS = 500.0  #@param {type:"number"}
 
 # --- CMA-ME ---
 N_EMITTERS = 10  #@param {type:"integer"}
@@ -27,7 +27,7 @@ GREEDY_MEM = True  #@param {type:"boolean"}
 SEPARABLE = True  #@param {type:"boolean"}
 N_INIT_SAMPLES = 500  #@param {type:"integer"}
 
-N_STEPS = 1000  #@param {type:"integer"}
+N_STEPS = 200  #@param {type:"integer"}
 
 # --- Checkpoint ---
 CHECKPOINT_PATH = ''  #@param {type:"string"}
