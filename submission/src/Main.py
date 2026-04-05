@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 class SSLVE:
     """
-    Self-Supervised Latent Variable Evolution.
+    Latent Variable Evolution.
 
     Orchestrates: SearchPhase -> Collector -> BehaviorMatching -> LatentModule
 
