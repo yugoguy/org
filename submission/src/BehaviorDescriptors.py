@@ -109,51 +109,6 @@ class PlanarArmBD_CVT:
 
 
 
-class AntOmniBD_Grid:
-    """
-    Grid-based behavior descriptor for Ant omni-directional locomotion.
-    Behavior is final (x, y) CoM position, discretized into a 2D grid.
-
-    Args:
-        bin_ranges: list of (min, max) per dimension [(x_min, x_max), (y_min, y_max)]
-        bin_sizes: list of number of bins per dimension [nx, ny]
-    """
-
-    def __init__(self, bin_ranges=None, bin_sizes=None):
-        if bin_ranges is None:
-            bin_ranges = [(-30.0, 30.0), (-30.0, 30.0)]
-        if bin_sizes is None:
-            bin_sizes = [100, 100]
-        self.bin_ranges = bin_ranges
-        self.bin_sizes = bin_sizes
-
-    def describe(self, info):
-        return info["final_xy"]
-
-    def discretize(self, descriptor):
-        bin_id = []
-        for val, (lo, hi), n_bins in zip(descriptor, self.bin_ranges, self.bin_sizes):
-            clamped = float(max(lo, min(val, hi)))
-            idx = int((clamped - lo) / (hi - lo) * n_bins)
-            idx = min(idx, n_bins - 1)
-            bin_id.append(idx)
-        return tuple(bin_id)
-
-    def total_bins(self):
-        result = 1
-        for n in self.bin_sizes:
-            result *= n
-        return result
-    def bin_value(self, bin_id):
-        """Return grid cell center for given bin_id tuple."""
-        value = []
-        for idx, (lo, hi), n_bins in zip(bin_id, self.bin_ranges, self.bin_sizes):
-            cell_width = (hi - lo) / n_bins
-            value.append(lo + (idx + 0.5) * cell_width)
-        return np.array(value)
-
-
-
 class AntGaitBD:
     """
     Grid-based behavior descriptor for Ant gait, using 4D foot contact
