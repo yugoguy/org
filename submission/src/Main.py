@@ -1,0 +1,281 @@
+import matplotlib.pyplot as plt
+
+
+class SSLVE:
+    """
+    Self-Supervised Latent Variable Evolution.
+
+    Orchestrates: SearchPhase -> Collector -> BehaviorMatching -> LatentModule
+
+    Args:
+        search_phase (SP): generates candidate thetas, converts to agents
+        collector (CO): collects raw episode info from agents
+        behavior_matching (BM): manages archive with behavior descriptors
+        latent_module (LM): trains representation on archive
+        device: 'cpu' or 'cuda'
+    """
+
+    def __init__(self, search_phase, collector, behavior_matching, latent_module, device='cpu'):
+        self.SP = search_phase
+        self.CO = collector
+        self.BM = behavior_matching
+        self.LM = latent_module
+        self.device = device
+        self.history = {
+            'fitness_min': [],
+            'fitness_mean': [],
+            'fitness_max': [],
+            'coverage': [],
+            'archive_size': [],
+            'qd_score': [],
+        }
+
+    def step(self, train_kwargs=None):
+        """
+        One SSLVE iteration:
+        1. SP generates thetas
+        2. SP converts to agents, CO collects info
+        3. BM updates archive
+        4. LM trains on archive
+
+        Args:
+            train_kwargs: dict passed to LM.fit()
+
+        Returns:
+            loss history from LM.fit()
+        """
+        if train_kwargs is None:
+            train_kwargs = {}
+
+        # Search
+        thetas = self.SP.sample(
+            latent_module=self.LM,
+            collector=self.CO,
+            behavior_matching=self.BM,
+        )
+
+        # Collect
+        import time
+        infos = []
+        n_total = len(thetas)
+        t_start = time.time()
+        for i, theta in enumerate(thetas):
+            agent = self.SP.make_agent(theta)
+            info = self.CO.collect(agent)
+            infos.append(info)
+            elapsed = time.time() - t_start
+            rate = (i + 1) / elapsed if elapsed > 0 else 0
+            eta = (n_total - i - 1) / rate if rate > 0 else 0
+            print(f"\rCollecting: {i+1}/{n_total} [{elapsed:.0f}s elapsed, {eta:.0f}s remaining]", end="", flush=True)
+        print()
+
+        # Update archive
+        self.BM.update(thetas, infos)
+
+        # Record stats
+        f_min, f_mean, f_max = self.BM.fitness_stats()
+        self.history['fitness_min'].append(f_min)
+        self.history['fitness_mean'].append(f_mean)
+        self.history['fitness_max'].append(f_max)
+        self.history['coverage'].append(self.BM.coverage())
+        self.history['archive_size'].append(self.BM.archive_size())
+        self.history['qd_score'].append(self.BM.qd_score())
+
+        print(f"Archive: {self.BM.archive_size()}, "
+              f"Bins: {len(self.BM.bins)}, "
+              f"Coverage: {self.BM.coverage():.4f}, "
+              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}")
+        print(f"QD-score: {self.BM.qd_score():.4f}")
+
+        # Train latent module
+        lm_history = self.LM.fit(
+            dataset=self.BM.dataset,
+            bin_ids=self.BM.bin_ids,
+            bins=self.BM.bins_idx,
+            device=self.device,
+            **train_kwargs
+        )
+        return lm_history
+
+    def run(self, n_steps, train_kwargs=None):
+        """
+        Full SSLVE loop.
+
+        Args:
+            n_steps: number of iterations
+            train_kwargs: dict passed to LM.fit() each step
+
+        Returns:
+            list of loss histories
+        """
+        histories = []
+        for t in range(n_steps):
+            print(f"\n--- SSLVE Step {t+1}/{n_steps} ---")
+            history = self.step(train_kwargs)
+            histories.append(history)
+        return histories
+
+    def plot_history(self, save_path=None):
+        """Plot fitness, coverage, archive size, and QD-score over steps."""
+        if not self.history['fitness_min']:
+            print("No history available.")
+            return
+
+        steps = range(len(self.history['fitness_min']))
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+        ax = axes[0, 0]
+        ax.plot(steps, self.history['fitness_min'], label='Min')
+        ax.plot(steps, self.history['fitness_mean'], label='Mean')
+        ax.plot(steps, self.history['fitness_max'], label='Max')
+        ax.set_xlabel('Step')
+        ax.set_ylabel('Fitness')
+        ax.set_title('Fitness over Steps')
+        ax.legend()
+
+        ax = axes[0, 1]
+        ax.plot(steps, self.history['coverage'])
+        ax.set_xlabel('Step')
+        ax.set_ylabel('Coverage')
+        ax.set_title('Behavior Coverage')
+
+        ax = axes[1, 0]
+        ax.plot(steps, self.history['archive_size'])
+        ax.set_xlabel('Step')
+        ax.set_ylabel('Size')
+        ax.set_title('Archive Size')
+
+        ax = axes[1, 1]
+        ax.plot(steps, self.history['qd_score'])
+        ax.set_xlabel('Step')
+        ax.set_ylabel('QD-score')
+        ax.set_title('QD-score')
+
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, bbox_inches='tight')
+        else:
+            plt.show()
+        plt.close()
+
+
+
+class MAPElite:
+    """
+    MAP-Elites without latent module.
+
+    Orchestrates: SearchPhase -> Collector -> BehaviorMatching
+
+    Args:
+        search_phase (SP): generates candidate thetas, converts to agents
+        collector (CO): collects raw episode info from agents
+        behavior_matching (BM): manages archive with behavior descriptors
+    """
+
+    def __init__(self, search_phase, collector, behavior_matching):
+        self.SP = search_phase
+        self.CO = collector
+        self.BM = behavior_matching
+        self.history = {
+            'fitness_min': [],
+            'fitness_mean': [],
+            'fitness_max': [],
+            'coverage': [],
+            'archive_size': [],
+            'qd_score': [],
+        }
+
+    def step(self):
+        """
+        One MAP-Elite iteration:
+        1. SP generates thetas
+        2. SP converts to agents, CO collects info
+        3. BM updates archive
+        """
+        thetas = self.SP.sample(
+            collector=self.CO,
+            behavior_matching=self.BM,
+        )
+
+        import time
+        infos = []
+        n_total = len(thetas)
+        t_start = time.time()
+        for i, theta in enumerate(thetas):
+            agent = self.SP.make_agent(theta)
+            info = self.CO.collect(agent)
+            infos.append(info)
+            elapsed = time.time() - t_start
+            rate = (i + 1) / elapsed if elapsed > 0 else 0
+            eta = (n_total - i - 1) / rate if rate > 0 else 0
+            print(f"\rCollecting: {i+1}/{n_total} [{elapsed:.0f}s elapsed, {eta:.0f}s remaining]", end="", flush=True)
+        print()
+
+        self.BM.update(thetas, infos)
+
+        f_min, f_mean, f_max = self.BM.fitness_stats()
+        self.history['fitness_min'].append(f_min)
+        self.history['fitness_mean'].append(f_mean)
+        self.history['fitness_max'].append(f_max)
+        self.history['coverage'].append(self.BM.coverage())
+        self.history['archive_size'].append(self.BM.archive_size())
+        self.history['qd_score'].append(self.BM.qd_score())
+
+        print(f"Archive: {self.BM.archive_size()}, "
+              f"Bins: {len(self.BM.bins)}, "
+              f"Coverage: {self.BM.coverage():.4f}, "
+              f"Fitness min/mean/max: {f_min:.2f}/{f_mean:.2f}/{f_max:.2f}")
+        print(f"QD-score: {self.BM.qd_score():.4f}")
+
+    def run(self, n_steps):
+        """
+        Full MAP-Elite loop.
+
+        Args:
+            n_steps: number of iterations
+        """
+        for t in range(n_steps):
+            print(f"\n--- MAP-Elite Step {t+1}/{n_steps} ---")
+            self.step()
+
+    def plot_history(self, save_path=None):
+        if not self.history['fitness_min']:
+            print("No history available.")
+            return
+
+        steps = range(len(self.history['fitness_min']))
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+        ax = axes[0, 0]
+        ax.plot(steps, self.history['fitness_min'], label='Min')
+        ax.plot(steps, self.history['fitness_mean'], label='Mean')
+        ax.plot(steps, self.history['fitness_max'], label='Max')
+        ax.set_xlabel('Step')
+        ax.set_ylabel('Fitness')
+        ax.set_title('Fitness over Steps')
+        ax.legend()
+
+        ax = axes[0, 1]
+        ax.plot(steps, self.history['coverage'])
+        ax.set_xlabel('Step')
+        ax.set_ylabel('Coverage')
+        ax.set_title('Behavior Coverage')
+
+        ax = axes[1, 0]
+        ax.plot(steps, self.history['archive_size'])
+        ax.set_xlabel('Step')
+        ax.set_ylabel('Size')
+        ax.set_title('Archive Size')
+
+        ax = axes[1, 1]
+        ax.plot(steps, self.history['qd_score'])
+        ax.set_xlabel('Step')
+        ax.set_ylabel('QD-score')
+        ax.set_title('QD-score')
+
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, bbox_inches='tight')
+        else:
+            plt.show()
+        plt.close()
